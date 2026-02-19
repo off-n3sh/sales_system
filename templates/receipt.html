@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Receipt - {{ order.receipt_id }}{% endblock %}
+{% block content %}
+<div class="receipt-container p-0 mx-auto" style="width: 72mm; background-color: #ffffff; color: #000000;">
+    <!-- Debug Output (hidden) -->
+    <div style="display: none;">
+        Debug Order: {{ order | tojson }}
+    </div>
+
+    <!-- Print Button -->
+    <div class="print-control text-center mb-3">
+        <button id="printButton" onclick="printpage()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 focus:outline-none">
+            Print Receipt
+        </button>
+    </div>
+
+    <!-- Receipt Content -->
+    <div class="receipt-content p-3" style="font-size: 13px; line-height: 1.3;">
+        <!-- Header -->
+        <div class="text-center mb-3 pb-2" style="border-bottom: 1px dashed #ccc;">
+            <div class="font-bold" style="font-size: 16px;">DREAMLAND DISTRIBUTORS</div>
+            <div style="font-size: 12px;">P.O Box 123-00200 Nairobi</div>
+            <div style="font12px;">Phone: 0725 530632</div>
+            <div style="font-size: 12px;">PIN: P051472913X</div>
+        </div>
+
+        <!-- Receipt Info -->
+        <div class="mb-3">
+            <div class="flex justify-between mb-1">
+                <div><strong>Receipt #:</strong> {{ order.receipt_id | default(order._id) }}</div>
+                <div><strong>Sale Type:</strong> 
+                    {% if order.balance and order.balance > 0 %}
+                        Credit Sale
+                    {% else %}
+                        Cash Sale
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex justify-between mb-1">
+                <div><strong>Date:</strong> {{ order.date.strftime('%d/%m/%Y') if order.date else 'N/A' }}</div>
+                <div><strong>Time:</strong> {{ order.date.strftime('%H:%M:%S') if order.date else 'N/A' }}</div>
+            </div>
+            <div class="flex justify-between mb-1">
+                <div><strong>Paybill:</strong> 529914</div>
+                <div><strong>Account:</strong> 20860</div>
+            </div>
+            <div><strong>Customer:</strong> 
+                {% if order.order_type == 'app' %}
+                    {{ order.salesperson_name | default('Unknown') }}
+                {% else %}
+                    {{ order.shop_name | default('Unknown') }}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="mb-3">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <thead>
+                    <tr style="border-top: 2px solid #000; border-bottom: 2px solid #000;">
+                        <th style="text-align: left; padding: 6px 2px; width: 40%; font-weight: bold;">Item</th>
+                        <th style="text-align: center; padding: 6px 2px; width: 15%; font-weight: bold;">Qty</th>
+                        <th style="text-align: right; padding: 6px 2px; width: 20%; font-weight: bold;">Price</th>
+                        <th style="text-align: right; padding: 6px 2px; width: 25%; font-weight: bold;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if order.items_list is iterable and order.items_list is not string %}
+                        {% set items = order.items_list | sort(attribute='name') %}
+                        {% for item in items %}
+                            <tr {% if not loop.last %}style="border-bottom: 1px solid #333;"{% endif %}>
+                                <td style="text-align: left; padding: 5px 2px; color: #000;">{{ item.name | default('Unknown') }}</td>
+                                <td style="text-align: center; padding: 5px 2px; color: #000; font-weight: bold;">{{ item.quantity | default(0) }}</td>
+                                <td style="text-align: right; padding: 5px 2px; color: #000; font-weight: bold;">{{ item.price | default(0) }}</td>
+                                <td style="text-align: right; padding: 5px 2px; color: #000; font-weight: bold;">{{ item.amount | default(0) | round(2) }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="4" style="text-align: center; padding: 5px 2px; color: #000;">No items available</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Summary -->
+        <div class="mb-3" style="border-top: 2px solid #000; padding-top: 6px;">
+            <div class="flex justify-between mb-1">
+                <div><strong>Total Items:</strong></div>
+                <div style="font-weight: bold;">{{ order.items_list | length if order.items_list is iterable and order.items_list is not string else 0 }}</div>
+            </div>
+            <div class="flex justify-between mb-1">
+                <div><strong>VAT (16%):</strong></div>
+                <div style="font-weight: bold;">0.00</div>
+            </div>
+            <div class="flex justify-between mb-2" style="font-size: 14px;">
+                <div><strong>Subtotal:</strong></div>
+                <div style="font-weight: bold;">{{ order.subtotal | round(2) | default(0) }}</div>
+            </div>
+        </div>
+
+        <!-- Payment Info -->
+        <div class="mb-3" style="border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 8px 0;">
+            <div class="flex justify-between font-bold mb-1" style="font-size: 14px;">
+                <div>Paid Amount:</div>
+                <div>{{ order.payment | default(0) | round(2) }}</div>
+            </div>
+            {% if order.balance and order.balance > 0 %}
+            <div class="flex justify-between font-bold mb-1" style="font-size: 14px; border: 2px solid #000; padding: 4px; background-color: #f5f5f5;">
+                <div>*** Balance Due ***</div>
+                <div>{{ order.balance | default(0) | round(2) }}</div>
+            </div>
+            {% else %}
+            <div class="flex justify-between font-bold mb-1" style="font-size: 14px;">
+                <div>Balance:</div>
+                <div>{{ order.balance | default(0) | round(2) }}</div>
+            </div>
+            {% endif %}
+            <div class="flex justify-between font-bold">
+                <div>Change:</div>
+                <div>{{ (order.payment - order.subtotal) | round(2) if order.payment > order.subtotal else 0 }}</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center" style="font-size: 11px;">
+            <div>You were served by: {{ order.salesperson_name | default('Unknown') }}</div>
+            <div>Prices inclusive of VAT where applicable</div>
+            <div>Once goods sold, no return</div>
+            <div class="mt-2 font-bold">Thank you for shopping with us!</div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    function printpage() {
+        document.getElementById('printButton').style.visibility = "hidden";
+        window.print();
+        document.getElementById('printButton').style.visibility = "visible";
+    }
+</script>
+
+<style>
+    @media print {
+        body * { visibility: hidden; }
+        .receipt-container, .receipt-container * { visibility: visible; }
+        .receipt-container { position: absolute; left: 0; top: 0; width: 72mm; margin: 0; padding: 0; border: none; box-shadow: none; }
+        .print-control { display: none; }
+        @page { size: 80mm auto; margin: 0; }
+    }
+    .flex { display: flex; }
+    .justify-between { justify-content: space-between; }
+    .text-center { text-align: center; }
+    .font-bold { font-weight: bold; }
+    .mb-1 { margin-bottom: 0.25rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-3 { margin-bottom: 0.75rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .p-0 { padding: 0; }
+    .p-3 { padding: 0.75rem; }
+    .pb-2 { padding-bottom: 0.5rem; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+</style>
+{% endblock %}

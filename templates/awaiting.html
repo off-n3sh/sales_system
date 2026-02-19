@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Awaiting Approval — Dreamland</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:       #0a0a0a;
+            --surface:  #111111;
+            --border:   #1f1f1f;
+            --gold:     #c9a84c;
+            --gold-dim: #8a6e2f;
+            --text:     #f0ece4;
+            --muted:    #666;
+            --dim:      #999;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Background texture */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                radial-gradient(ellipse 80% 60% at 50% -10%, rgba(201,168,76,0.07) 0%, transparent 70%),
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 40px,
+                    rgba(255,255,255,0.012) 40px,
+                    rgba(255,255,255,0.012) 41px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 40px,
+                    rgba(255,255,255,0.012) 40px,
+                    rgba(255,255,255,0.012) 41px
+                );
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrapper {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 560px;
+            padding: 0 24px;
+        }
+
+        /* Logo / Brand */
+        .brand {
+            font-family: 'Playfair Display', serif;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.35em;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 56px;
+            animation: fadeDown 0.6s ease both;
+        }
+
+        /* Animated ring */
+        .ring-wrap {
+            position: relative;
+            width: 96px;
+            height: 96px;
+            margin-bottom: 40px;
+            animation: fadeDown 0.6s ease 0.1s both;
+        }
+
+        .ring {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            border: 1.5px solid var(--border);
+            border-top-color: var(--gold);
+            animation: spin 2.4s linear infinite;
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        .ring-inner {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            border-bottom-color: var(--gold-dim);
+            animation: spin 3.6s linear infinite reverse;
+            position: absolute;
+            top: 12px; left: 12px;
+        }
+
+        .ring-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--gold);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 16px var(--gold-dim);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Heading */
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 32px;
+            font-weight: 900;
+            line-height: 1.15;
+            color: var(--text);
+            margin-bottom: 16px;
+            animation: fadeDown 0.6s ease 0.2s both;
+        }
+
+        h1 span {
+            color: var(--gold);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            font-weight: 300;
+            color: var(--dim);
+            line-height: 1.7;
+            margin-bottom: 40px;
+            animation: fadeDown 0.6s ease 0.3s both;
+        }
+
+        .subtitle strong {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        /* Status pill */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(201,168,76,0.08);
+            border: 1px solid rgba(201,168,76,0.2);
+            border-radius: 100px;
+            padding: 8px 18px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-bottom: 48px;
+            animation: fadeDown 0.6s ease 0.4s both;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--gold);
+            border-radius: 50%;
+            animation: pulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%       { opacity: 0.4; transform: scale(0.7); }
+        }
+
+        /* Value props */
+        .props {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 56px;
+            animation: fadeDown 0.6s ease 0.5s both;
+        }
+
+        .prop {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .prop-icon {
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .prop-label {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        /* Divider */
+        .divider {
+            width: 40px;
+            height: 1px;
+            background: var(--border);
+            margin: 0 auto 32px;
+            animation: fadeDown 0.6s ease 0.55s both;
+        }
+
+        /* Footer note */
+        .footer-note {
+            font-size: 11px;
+            color: var(--muted);
+            animation: fadeDown 0.6s ease 0.6s both;
+            line-height: 1.8;
+        }
+
+        .footer-note a {
+            color: var(--dim);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        /* Approved state (shown by JS) */
+        .approved-state {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            animation: fadeDown 0.4s ease both;
+        }
+
+        .approved-state .check {
+            font-size: 48px;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+        }
+
+        .approved-state h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            color: #3dba7a;
+        }
+
+        .approved-state p {
+            font-size: 13px;
+            color: var(--dim);
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.5); opacity: 0; }
+            to   { transform: scale(1);   opacity: 1; }
+        }
+
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="wrapper">
+
+        <div class="brand">Dreamland</div>
+
+        <!-- Pending state -->
+        <div id="pending-state">
+            <div class="ring-wrap">
+                <div class="ring"></div>
+                <div class="ring-inner"></div>
+                <div class="ring-dot"></div>
+            </div>
+
+            <h1>Almost <span>There.</span></h1>
+
+            <p class="subtitle">
+                Your account is being reviewed by our team.<br>
+                We'll have you up and running shortly.<br><br>
+                Signed up as <strong>{{ email }}</strong>
+            </p>
+
+            <div class="status-pill">
+                <div class="status-dot"></div>
+                Pending Approval
+            </div>
+
+            <div class="props">
+                <div class="prop">
+                    <div class="prop-icon">🚚</div>
+                    <div class="prop-label">Fast Delivery</div>
+                </div>
+                <div class="prop">
+                    <div class="prop-icon">💰</div>
+                    <div class="prop-label">Best Prices</div>
+                </div>
+                <div class="prop">
+                    <div class="prop-icon">📦</div>
+                    <div class="prop-label">Live Stock</div>
+                </div>
+                <div class="prop">
+                    <div class="prop-icon">🤝</div>
+                    <div class="prop-label">Trusted Team</div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <p class="footer-note">
+                This page checks automatically. You'll be redirected<br>
+                to login the moment your account is approved.<br><br>
+                Questions? <a href="mailto:support@dreamland.co.ke">support@dreamland.co.ke</a>
+            </p>
+        </div>
+
+        <!-- Approved state (shown by JS on approval) -->
+        <div class="approved-state" id="approved-state">
+            <div class="check">✅</div>
+            <h2>You're Approved!</h2>
+            <p>Redirecting you to login...</p>
+        </div>
+
+    </div>
+
+    <script>
+        const email   = "{{ email }}";
+        const authUrl = `/api/auth/status?email=${encodeURIComponent(email)}`;
+
+        async function checkStatus() {
+            try {
+                const res  = await fetch(authUrl);
+                const data = await res.json();
+
+                if (data.status === 'active') {
+                    // Show approved state
+                    document.getElementById('pending-state').style.display  = 'none';
+                    document.getElementById('approved-state').style.display = 'flex';
+
+                    // Redirect to login after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = '/auth';
+                    }, 2000);
+                    return; // stop polling
+                }
+
+                // Still pending — check again in 8 seconds
+                setTimeout(checkStatus, 8000);
+
+            } catch (err) {
+                // Network blip — try again
+                setTimeout(checkStatus, 10000);
+            }
+        }
+
+        // Start polling only if we have an email
+        if (email) checkStatus();
+    </script>
+
+</body>
+</html>

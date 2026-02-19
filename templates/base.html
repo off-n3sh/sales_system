@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dreamland Enterprises - {% block title %}{% endblock %}</title>
+    <link href="{{ url_for('static', filename='css/tailwind.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/all.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/fontawesome.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('%c[DEBUG] DOM LOADED - STARTING INIT', 'color: cyan; font-weight: bold');
+
+            // === ELEMENT CHECKS ===
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebar-toggle');
+            const close = document.getElementById('sidebar-close');
+            const themeToggle = document.getElementById('theme-toggle');
+
+            console.log('[ELEMENTS] sidebar:', sidebar);
+            console.log('[ELEMENTS] toggle:', toggle);
+            console.log('[ELEMENTS] close:', close);
+            console.log('[ELEMENTS] themeToggle:', themeToggle);
+
+            if (!sidebar) console.error('[ERROR] #sidebar NOT FOUND');
+            if (!toggle) console.error('[ERROR] #sidebar-toggle NOT FOUND');
+            if (!close) console.error('[ERROR] #sidebar-close NOT FOUND');
+
+            // === THEME ===
+            if (localStorage.getItem('theme') === 'dark' || 
+                (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.body.classList.add('dark');
+                updateThemeIcon(true);
+                console.log('[THEME] Dark mode applied');
+            } else {
+                document.body.classList.remove('dark');
+                updateThemeIcon(false);
+                console.log('[THEME] Light mode applied');
+            }
+
+            function updateThemeIcon(isDark) {
+                if (themeToggle) {
+                    themeToggle.innerHTML = isDark 
+                        ? '<i class="fas fa-sun mr-2"></i> Light Mode'
+                        : '<i class="fas fa-moon mr-2"></i> Dark Mode';
+                    console.log(`[THEME] Icon updated: ${isDark ? 'Sun' : 'Moon'}`);
+                }
+            }
+
+            // === SIDEBAR TOGGLE ===
+            if (toggle) {
+                toggle.addEventListener('click', (e) => {
+                    console.log('%c[TOGGLE] CLICKED!', 'color: lime; font-weight: bold');
+                    console.log('[TOGGLE] Event:', e);
+                    console.log('[TOGGLE] Before classes:', Array.from(sidebar.classList));
+
+                    const hasHidden = sidebar.classList.contains('-translate-x-full');
+                    console.log(`[TOGGLE] Has -translate-x-full: ${hasHidden}`);
+
+                    sidebar.classList.toggle('-translate-x-full');
+
+                    const afterClasses = Array.from(sidebar.classList);
+                    console.log('[TOGGLE] After classes:', afterClasses);
+                    console.log(`[TOGGLE] Now hidden: ${!afterClasses.includes('-translate-x-full') ? 'NO → VISIBLE' : 'YES → HIDDEN'}`);
+                });
+            }
+
+            if (close) {
+                close.addEventListener('click', () => {
+                    console.log('%c[CLOSE] CLICKED!', 'color: red; font-weight: bold');
+                    sidebar.classList.add('-translate-x-full');
+                    console.log('[CLOSE] Forced -translate-x-full');
+                });
+            }
+
+            // === THEME TOGGLE ===
+            if (themeToggle) {
+                themeToggle.addEventListener('click', () => {
+                    const isDark = document.body.classList.toggle('dark');
+                    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                    updateThemeIcon(isDark);
+                    console.log(`[THEME] Toggled → ${isDark ? 'DARK' : 'LIGHT'}`);
+                });
+            }
+
+            // === LOGOUT ===
+            window.handleLogout = function(event) {
+                event.preventDefault();
+                console.log('[LOGOUT] Redirecting...');
+                window.location.href = "{{ url_for('logout') }}";
+            };
+        });
+
+        // === CUSTOM STYLES (UNCHANGED) ===
+        const style = document.createElement('style');
+        style.textContent = `
+            .sales-card { background-color: #f7fafc; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem; }
+            .dark .sales-card { background-color: #2d3748; border-color: #4a5568; }
+            .total-sales-card { background-color: #e6f0fa; border: 1px solid #90cdf4; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1rem; }
+            .dark .total-sales-card { background-color: #2b6cb0; border-color: #63b3ed; }
+            .sales-card-title { color: #1a202c; font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem; }
+            .dark .sales-card-title { color: #f7fafc; }
+            .sales-card-value { color: #2b6cb0; font-weight: 700; font-size: 1.5rem; }
+            .dark .sales-card-value { color: #63b3ed; }
+            input, select, textarea { background-color: #ffffff; border: 1px solid #cbd5e0; color: #1a202c; border-radius: 0.375rem; padding: 0.5rem 0.75rem; width: 100%; }
+            .dark input, .dark select, .dark textarea { background-color: #2d3748; border-color: #4a5568; color: #f7fafc; }
+            input:focus, select:focus, textarea:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.5); }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; background-color: #ffffff; border-radius: 0.5rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+            .dark table { background-color: #2d3748; }
+            th { background-color: #edf2f7; color: #1a202c; font-weight: 600; text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid #cbd5e0; }
+            .dark th { background-color: #4a5568; color: #f7fafc; border-bottom-color: #2d3748; }
+            td { padding: 0.75rem 1rem; border-bottom: 1px solid #e2e8f0; color: #4a5568; }
+            .dark td { border-bottom-color: #4a5568; color: #e2e8f0; }
+            tr:last-child td { border-bottom: none; }
+            .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; min-width: 100px; }
+            .btn-primary { background-color: #2b6cb0; color: white; }
+            .btn-primary:hover { background-color: #2c5282; }
+            .dark .btn-primary { background-color: #3182ce; }
+            .dark .btn-primary:hover { background-color: #2b6cb0; }
+            .sales-history-btn-group { display: flex; flex-wrap: nowrap; gap: 0.5rem; margin-bottom: 1rem; justify-content: flex-start; width: 100%; align-items: center; }
+            .sales-history-btn-group .btn { flex: 1; max-width: 150px; text-align: center; }
+            .sales-history-btn-group select { flex: 0 0 auto; max-width: 150px; }
+            .card { background-color: #ffffff; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); padding: 1.5rem; margin-bottom: 1.5rem; }
+            .dark .card { background-color: #2d3748; }
+            .card-header { font-weight: 600; font-size: 1.25rem; margin-bottom: 1rem; color: #1a202c; }
+            .dark .card-header { color: #f7fafc; }
+            .sales-cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        `;
+        document.head.appendChild(style);
+    </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-white transition-colors duration-300 font-sans">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div id="sidebar" class="w-64 bg-blue-800 dark:bg-gradient-to-b dark:from-orange-600 dark:to-gray-700 shadow-lg p-6 flex flex-col h-full transition-all duration-300 transform -translate-x-full md:translate-x-0">
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="text-2xl font-bold text-white">Dreamland</h1>
+                <button id="sidebar-close" class="text-white hover:text-orange-200 focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <nav class="flex-1 space-y-4">
+                {% if session['user']['role'] in ['pending', 'team_member', 'manager'] %}
+                    <a href="{{ url_for('dashboard') }}" class="flex items-center py-2 px-4 text-white hover:bg-blue-600 dark:hover:bg-orange-500 hover:text-white rounded-lg transition-all duration-200 hover:shadow-md">
+                        <i class="fas fa-tachometer-alt mr-3"></i> Dashboard
+                    </a>
+                {% endif %}
+                {% if session['user']['role'] in ['team_member', 'manager'] %}
+                    <a href="{{ url_for('orders') }}" class="flex items-center py-2 px-4 text-white hover:bg-blue-600 dark:hover:bg-orange-500 hover:text-white rounded-lg transition-all duration-200 hover:shadow-md">
+                        <i class="fas fa-shopping-cart mr-3"></i> Orders
+                    </a>
+                    <a href="{{ url_for('receipts') }}" class="flex items-center py-2 px-4 text-white hover:bg-blue-600 dark:hover:bg-orange-500 hover:text-white rounded-lg transition-all duration-200 hover:shadow-md">
+                        <i class="fas fa-receipt mr-3"></i> Receipts
+                    </a>
+                    <a href="{{ url_for('clients') }}" class="flex items-center py-2 px-4 text-white hover:bg-blue-600 dark:hover:bg-orange-500 hover:text-white rounded-lg transition-all duration-200 hover:shadow-md">
+                        <i class="fas fa-user-group mr-3"></i> Clients
+                    </a>
+                    <a href="{{ url_for('loading_sheets') }}" class="flex items-center py-2 px-4 text-white hover:bg-blue-600 dark:hover:bg-orange-500 hover:text-white rounded-lg transition-all duration-200 hover:shadow-md">
+                        <i class="fas fa-file-alt mr-3"></i> Loading Sheets
+                    </a>
+                {% endif %}
+                {% if session['user']['role'] == 'manager' %}
+                    <a href="{{ url_for('stock') }}" class="flex items-center py-2 px-4 text-white hover:bg-blue-600 dark:hover:bg-orange-500 hover:text-white rounded-lg transition-all duration-200 hover:shadow-md">
+                        <i class="fas fa-warehouse mr-3"></i> Stock
+                    </a>
+                    <a href="{{ url_for('reports') }}" class="flex items-center py-2 px-4 text-white hover:bg-blue-600 dark:hover:bg-orange-500 hover:text-white rounded-lg transition-all duration-200 hover:shadow-md">
+                        <i class="fas fa-chart-bar mr-3"></i> Reports
+                    </a>
+                {% endif %}
+            </nav>
+            <div class="mt-auto space-y-4">
+                <button id="theme-toggle" class="w-full bg-blue-600 dark:bg-orange-500 text-white py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-orange-600 transition-all duration-200 flex items-center justify-center hover:shadow-md">
+                    <i class="fas fa-moon mr-2 dark:hidden"></i>
+                    <i class="fas fa-sun mr-2 hidden dark:inline"></i>
+                    <span class="dark:hidden">Dark Mode</span>
+                    <span class="hidden dark:inline">Light Mode</span>
+                </button>
+                <a href="#" onclick="handleLogout(event)" id="logout" class="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-all duration-200 flex items-center justify-center hover:shadow-md">
+                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div id="main-content" class="flex-1 transition-all duration-300">
+            <header class="bg-blue-900 text-white p-4 flex items-center justify-between shadow-md">
+                <button id="sidebar-toggle" class="text-white hover:text-blue-200 focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                    </svg>
+                </button>
+                <h1 class="text-2xl font-semibold">Dreamland Enterprises</h1>
+            </header>
+            <div class="p-6">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

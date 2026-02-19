@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Loading Sheets{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Page Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-4 md:mb-0">
+            Loading Sheets Management
+        </h1>
+        <div class="flex space-x-3">
+            <a href="{{ url_for('create_loading_sheet') }}" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                New Sheet
+            </a>
+        </div>
+    </div>
+
+    <!-- Current Loading Sheet Card -->
+    {% if aggregated_items %}
+    <div id="current-loading-sheet" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">Current Loading Sheet</h2>
+            <div class="flex space-x-3 mt-4 md:mt-0">
+                <button id="print-button" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z" />
+                    </svg>
+                    Print
+                </button>
+                <a href="{{ url_for('download_loading_sheet') }}" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download PDF
+                </a>
+            </div>
+        </div>
+
+        <div class="loading-sheet-content border border-gray-200 dark:border-gray-600 rounded-lg p-6">
+            <!-- Header -->
+            <div class="text-center mb-6">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white">Dreamland Distributors</h3>
+                <p class="text-gray-600 dark:text-gray-400">P.O Box 123-00200 Nairobi | Phone: 0725 530632</p>
+                <div class="flex justify-center items-center space-x-6 mt-3">
+                    <p class="text-sm font-medium"><strong>Date:</strong> {{ current_date.strftime('%d/%m/%Y %H:%M') if current_date else '' }}</p>
+                    {% if created_at %}
+                        <p class="text-sm font-medium"><strong>Created At:</strong> {{ created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Goods Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-700">
+                            <th class="border border-gray-200 dark:border-gray-600 px-4 py-3 text-left font-semibold">Item</th>
+                            <th class="border border-gray-200 dark:border-gray-600 px-4 py-3 text-left font-semibold">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in aggregated_items %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="border border-gray-200 dark:border-gray-600 px-4 py-3">{{ item.name }}</td>
+                            <td class="border border-gray-200 dark:border-gray-600 px-4 py-3">
+                                {% if "sugar" in item.name.lower() and "2k" in item.name.lower() %}
+                                    2 pieces x {{ item.quantity }}
+                                {% elif item.quantity > 1 %}
+                                    {{ item.quantity }} pieces
+                                {% else %}
+                                    Single unit
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-8 text-center">
+                <p class="text-lg font-medium text-gray-900 dark:text-white">Total Items: {{ total_items }}</p>
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="border-t pt-4">
+                        <p><strong>Driver Signature:</strong> ____________________</p>
+                    </div>
+                    <div class="border-t pt-4">
+                        <p><strong>Date Loaded:</strong> ____________________</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8 text-center">
+        <p class="text-gray-600 dark:text-gray-400">No current loading sheet. Click "New Sheet" to create one.</p>
+    </div>
+    {% endif %}
+
+    <!-- Recent Loading Sheets Section -->
+    {% if recent_sheets %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+        <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Recent Loading Sheets
+        </h3>
+        <div class="space-y-4">
+            {% for sheet in recent_sheets %}
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 transition hover:shadow-md">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="col-span-2">
+                        <!-- CHANGE 1: Use loading_sheet_id instead of id -->
+                        <p class="text-gray-900 dark:text-white font-medium">Sheet #{{ sheet.loading_sheet_id }}</p>
+                        <div class="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                            <p>Total Items: {{ sheet.total_items }}</p>
+                            <p>Created: {{ sheet.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-start md:justify-end items-center space-x-2">
+                        <!-- CHANGE 2: Use loading_sheet_id in URL -->
+                        <button onclick="printLoadingSheet('{{ sheet.loading_sheet_id }}')" class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z" />
+                            </svg>
+                            Print
+                        </button>
+                        <a href="{{ url_for('download_loading_sheet', sheet_id=sheet.loading_sheet_id) }}" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Download
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Load JS -->
+<script src="/static/js/loading_sheets.js"></script>
+{% endblock %}

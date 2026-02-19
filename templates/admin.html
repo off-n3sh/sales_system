@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+
+    <!-- ================================================
+         TOP NAV
+    ================================================ -->
+    <nav id="admin-nav">
+        <span>Dreamland</span>
+        <ul>
+            <li><a href="#" data-section="overview">Overview</a></li>
+            <li><a href="#" data-section="users">Users</a></li>
+            <li><a href="#" data-section="security">Security</a></li>
+            <li><a href="#" id="nav-logout">Logout</a></li>
+        </ul>
+    </nav>
+
+    <!-- ================================================
+         TOAST
+    ================================================ -->
+    <div id="toast" hidden>
+        <span id="toast-message"></span>
+    </div>
+
+    <!-- ================================================
+         SECTION: OVERVIEW
+    ================================================ -->
+    <section id="section-overview" data-section="overview">
+        <main>
+            <h1>Overview</h1>
+            <div id="stats-bar">
+                <div>
+                    <span>Total Users</span>
+                    <strong id="stat-total-users">—</strong>
+                </div>
+                <div>
+                    <span>Active Sessions</span>
+                    <strong id="stat-active-sessions">—</strong>
+                </div>
+                <div>
+                    <span>Pending Approval</span>
+                    <strong id="stat-pending-users">—</strong>
+                </div>
+                <div>
+                    <span>Blocked Users</span>
+                    <strong id="stat-blocked-users">—</strong>
+                </div>
+                <div>
+                    <span>Failed Logins (24hrs)</span>
+                    <strong id="stat-failed-attempts">—</strong>
+                </div>
+            </div>
+        </main>
+    </section>
+
+    <!-- ================================================
+         SECTION: USERS LIST
+    ================================================ -->
+    <section id="section-users" data-section="users" hidden>
+        <main>
+            <h1>All Users</h1>
+
+            <!-- Search -->
+            <div id="users-search-bar">
+                <input type="text" id="users-search-input" placeholder="Search by name or email...">
+                <button id="users-search-btn">Search</button>
+            </div>
+
+            <!-- Status filter tabs -->
+            <div id="users-filter-bar">
+                <button class="filter-btn active" data-status="all">All</button>
+                <button class="filter-btn" data-status="pending">Pending Approval</button>
+                <button class="filter-btn" data-status="active">Active</button>
+                <button class="filter-btn" data-status="blocked">Blocked</button>
+            </div>
+
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body"></tbody>
+            </table>
+            <div id="users-empty" hidden>No users found.</div>
+            <div id="users-loading" hidden>Loading...</div>
+        </main>
+    </section>
+
+    <!-- ================================================
+         SECTION: USER DETAIL
+    ================================================ -->
+    <section id="section-user-detail" data-section="user-detail" hidden>
+        <main>
+            <button id="btn-back-to-users">← Back to Users</button>
+            <h1 id="detail-user-name">—</h1>
+
+            <!-- User info grid -->
+            <div id="detail-user-info">
+                <p><strong>Email</strong><span id="detail-email">—</span></p>
+                <p><strong>Phone</strong><span id="detail-phone">—</span></p>
+                <p><strong>Role</strong><span id="detail-role">—</span></p>
+                <p><strong>Status</strong><span id="detail-status">—</span></p>
+                <p><strong>Joined</strong><span id="detail-joined">—</span></p>
+                <p><strong>Last Login</strong><span id="detail-last-login">—</span></p>
+            </div>
+
+            <!-- Admin actions -->
+            <div id="detail-admin-actions">
+                <h2>Actions</h2>
+                <button id="btn-detail-approve">Approve</button>
+                <button id="btn-detail-block">Block User</button>
+                <button id="btn-detail-force-logout">Force End Session</button>
+                <button id="btn-detail-reset-pw">Reset Password</button>
+
+                <div id="detail-role-change">
+                    <label for="role-select">Role</label>
+                    <select id="role-select">
+                        <option value="user">User</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                    <button id="btn-detail-change-role">Apply</button>
+                </div>
+            </div>
+
+            <!-- Session & activity logs -->
+            <div id="detail-logs">
+                <h2>Session &amp; Activity History</h2>
+                <table id="detail-logs-table">
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Reason</th>
+                            <th>Time</th>
+                            <th>IP Address</th>
+                            <th>Device / Browser</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detail-logs-body"></tbody>
+                </table>
+                <div id="detail-logs-empty" hidden>No activity logged yet.</div>
+                <div id="detail-logs-loading" hidden>Loading...</div>
+            </div>
+        </main>
+    </section>
+
+    <!-- ================================================
+         SECTION: RESET PASSWORD
+    ================================================ -->
+    <section id="section-reset-password" data-section="reset-password" hidden>
+        <main>
+            <button id="btn-back-from-reset">← Back</button>
+            <h1>Reset Password</h1>
+            <p>Resetting password for: <strong id="reset-user-label">—</strong></p>
+
+            <form id="reset-password-form">
+                <input type="hidden" id="reset-user-id">
+
+                <label for="reset-new-password">New Password</label>
+                <input type="password" id="reset-new-password" required>
+
+                <label for="reset-confirm-password">Confirm Password</label>
+                <input type="password" id="reset-confirm-password" required>
+
+                <button type="submit">Reset Password</button>
+            </form>
+        </main>
+    </section>
+
+    <!-- ================================================
+         SECTION: SECURITY
+    ================================================ -->
+    <section id="section-security" data-section="security" hidden>
+        <main>
+            <h1>Suspicious Activity</h1>
+            <p style="color: var(--text-muted); font-size:12px; margin-bottom:20px;">
+                All failed login attempts — wrong passwords, unknown emails, blocked accounts.
+            </p>
+
+            <!-- Quick filters -->
+            <div id="security-quick-filters">
+                <button class="quick-btn" data-quick="today">Today</button>
+                <button class="quick-btn" data-quick="yesterday">Yesterday</button>
+                <button class="quick-btn" data-quick="week">Last 7 Days</button>
+            </div>
+
+            <!-- Manual filters -->
+            <div id="security-filters">
+                <div>
+                    <label for="security-date-from">From</label>
+                    <input type="date" id="security-date-from">
+                </div>
+                <div>
+                    <label for="security-date-to">To</label>
+                    <input type="date" id="security-date-to">
+                </div>
+                <div>
+                    <label for="security-ip">IP Address</label>
+                    <input type="text" id="security-ip" placeholder="e.g. 82.x.x.x">
+                </div>
+                <div>
+                    <label for="security-reason">Reason</label>
+                    <select id="security-reason">
+                        <option value="">All</option>
+                        <option value="user_not_found">Unknown Email</option>
+                        <option value="wrong_password">Wrong Password</option>
+                        <option value="account_blocked">Blocked Account</option>
+                    </select>
+                </div>
+                <button id="security-filter-btn">Filter</button>
+                <button id="security-clear-btn">Clear</button>
+            </div>
+
+            <p id="security-count"></p>
+
+            <table id="security-table">
+                <thead>
+                    <tr>
+                        <th>Email Tried</th>
+                        <th>Reason</th>
+                        <th>Time</th>
+                        <th>IP Address</th>
+                        <th>Device / Browser</th>
+                    </tr>
+                </thead>
+                <tbody id="security-table-body"></tbody>
+            </table>
+            <div id="security-empty" hidden>No suspicious activity found.</div>
+            <div id="security-loading" hidden>Loading...</div>
+        </main>
+    </section>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Receipts{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+        <div class="bg-gray-100 p-4 border-b border-gray-200">
+            <div class="flex items-center space-x-4">
+                <div class="flex-grow relative">
+                    <input 
+                        type="text" 
+                        id="searchReceipts" 
+                        placeholder="Search receipt ID, shop, or salesperson" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autocomplete="off"
+                    >
+                    <div id="suggestions" class="absolute w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto hidden z-50"></div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <label for="time-filter" class="text-sm text-gray-600">Period:</label>
+                    <select id="time-filter" class="py-2 px-3 border border-gray-300 rounded-md">
+                        <option value="all">All Time</option>
+                        <option value="day">Daily</option>
+                        <option value="week">Weekly</option>
+                        <option value="month">Monthly</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-6">
+            <h2 class="text-xl font-bold mb-4">Stored Receipts ({{ total_orders }} total)</h2>
+            
+            <!-- Results Info -->
+            <div id="resultsInfo" class="mb-4 text-sm text-gray-600">
+                Showing <span id="showingFrom">1</span>-<span id="showingTo">30</span> of <span id="totalResults">{{ total_orders }}</span>
+            </div>
+            
+            <!-- Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse min-w-full">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2 text-left">Receipt ID</th>
+                            <th class="p-2 text-left">Shop</th>
+                            <th class="p-2 text-left">Salesperson</th>
+                            <th class="p-2 text-left">Date</th>
+                            <th class="p-2 text-right">Payment</th>
+                        </tr>
+                    </thead>
+                    <tbody id="receiptsBody">
+                        {% for order in orders %}
+                        <tr>
+                            <td class="p-2">
+                                <a href="{{ url_for('receipt', order_id=order.receipt_id | default(order._id)) }}" 
+                                   class="text-blue-600 hover:underline font-mono">{{ order.receipt_id | default(order._id) }}</a>
+                            </td>
+                            <td class="p-2">{{ order.shop_name | default('Unknown Shop') }}</td>
+                            <td class="p-2">{{ order.salesperson_name | default('N/A') }}</td>
+                            <td class="p-2">{{ order.date.strftime('%d/%m/%Y') if order.date else 'N/A' }}</td>
+                            <td class="p-2 text-right">{{ order.payment | default(0) | round(2) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                
+                {% if not orders %}
+                <div class="text-center py-8">
+                    <p class="text-gray-500">No receipts found.</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Pagination -->
+            <div id="pagination" class="flex justify-center mt-6 hidden">
+                <button id="prevPage" class="px-3 py-2 mx-1 bg-gray-200 rounded disabled:opacity-50" disabled>← Prev</button>
+                <span id="pageInfo" class="px-3 py-2 mx-1"></span>
+                <button id="nextPage" class="px-3 py-2 mx-1 bg-gray-200 rounded">Next →</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const PAGE_SIZE = 30;
+let currentPage = 1;
+let allOrders = {{ orders | tojson }};
+let filteredOrders = [...allOrders];
+let totalOrders = {{ total_orders }};
+
+const searchInput = document.getElementById('searchReceipts');
+const suggestions = document.getElementById('suggestions');
+const timeFilter = document.getElementById('time-filter');
+const receiptsBody = document.getElementById('receiptsBody');
+const pagination = document.getElementById('pagination');
+const prevPageBtn = document.getElementById('prevPage');
+const nextPageBtn = document.getElementById('nextPage');
+const pageInfo = document.getElementById('pageInfo');
+const resultsInfo = document.getElementById('resultsInfo');
+const showingFrom = document.getElementById('showingFrom');
+const showingTo = document.getElementById('showingTo');
+const totalResults = document.getElementById('totalResults');
+
+// Search with autocomplete
+searchInput.addEventListener('input', debounce(function(e) {
+    const term = e.target.value.toLowerCase();
+    showSuggestions(term);
+    filterOrders(term, timeFilter.value);
+}, 300));
+
+function showSuggestions(term) {
+    suggestions.innerHTML = '';
+    suggestions.classList.add('hidden');
+    
+    if (term.length < 2) return;
+    
+    const matches = allOrders.filter(order => 
+        (order.receipt_id || '').toLowerCase().includes(term) ||
+        (order.shop_name || '').toLowerCase().includes(term) ||
+        (order.salesperson_name || '').toLowerCase().includes(term)
+    ).slice(0, 5);
+    
+    if (matches.length > 0) {
+        matches.forEach(order => {
+            const div = document.createElement('div');
+            div.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer border-b';
+            div.innerHTML = `
+                <div><strong>${order.receipt_id || order._id}</strong></div>
+                <div class="text-sm">${order.shop_name || 'Unknown'} - ${order.salesperson_name || 'N/A'}</div>
+            `;
+            div.onclick = () => {
+                searchInput.value = order.receipt_id || order._id;
+                suggestions.classList.add('hidden');
+                filterOrders(searchInput.value.toLowerCase(), timeFilter.value);
+            };
+            suggestions.appendChild(div);
+        });
+        suggestions.classList.remove('hidden');
+    }
+}
+
+// Filter orders
+function filterOrders(searchTerm, period) {
+    let filtered = allOrders.filter(order => {
+        const matchesSearch = !searchTerm || 
+            (order.receipt_id || '').toLowerCase().includes(searchTerm) ||
+            (order.shop_name || '').toLowerCase().includes(searchTerm) ||
+            (order.salesperson_name || '').toLowerCase().includes(searchTerm);
+        
+        if (!matchesSearch) return false;
+        
+        if (period === 'all') return true;
+        
+        const date = order.date ? new Date(order.date) : null;
+        if (!date) return false;
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        switch(period) {
+            case 'day': return date.toDateString() === today.toDateString();
+            case 'week': 
+                const weekStart = new Date(today);
+                weekStart.setDate(today.getDate() - today.getDay());
+                return date >= weekStart;
+            case 'month': 
+                return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+        }
+        return true;
+    });
+    
+    filteredOrders = filtered;
+    currentPage = 1;
+    renderTable();
+}
+
+// Render paginated table
+function renderTable() {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    const pageOrders = filteredOrders.slice(start, end);
+    
+    receiptsBody.innerHTML = pageOrders.map(order => `
+        <tr>
+            <td class="p-2"><a href="/receipt/${order.receipt_id || order._id}" class="text-blue-600 hover:underline font-mono">${order.receipt_id || order._id}</a></td>
+            <td class="p-2">${order.shop_name || 'Unknown Shop'}</td>
+            <td class="p-2">${order.salesperson_name || 'N/A'}</td>
+            <td class="p-2">${order.date ? new Date(order.date).toLocaleDateString('en-GB') : 'N/A'}</td>
+            <td class="p-2 text-right">${(order.payment || 0).toFixed(2)}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="5" class="p-4 text-center text-gray-500">No receipts found</td></tr>';
+    
+    // Update pagination
+    const totalPages = Math.ceil(filteredOrders.length / PAGE_SIZE);
+    pageInfo.textContent = `${currentPage} of ${totalPages}`;
+    prevPageBtn.disabled = currentPage === 1;
+    nextPageBtn.disabled = currentPage === totalPages;
+    pagination.classList.remove('hidden');
+    
+    // Update results info
+    showingFrom.textContent = Math.min(start + 1, filteredOrders.length);
+    showingTo.textContent = Math.min(end, filteredOrders.length);
+    totalResults.textContent = filteredOrders.length;
+}
+
+// Pagination
+prevPageBtn.onclick = () => { if (currentPage > 1) currentPage--; renderTable(); };
+nextPageBtn.onclick = () => { if (currentPage < Math.ceil(filteredOrders.length / PAGE_SIZE)) currentPage++; renderTable(); };
+
+// Time filter
+timeFilter.onchange = () => filterOrders(searchInput.value.toLowerCase(), timeFilter.value);
+
+// Debounce
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Hide suggestions
+document.addEventListener('click', e => {
+    if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.classList.add('hidden');
+    }
+});
+
+// Initial load
+filterOrders('', 'all');
+
+// Keyboard navigation
+searchInput.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+        suggestions.classList.add('hidden');
+        filterOrders(searchInput.value.toLowerCase(), timeFilter.value);
+    }
+};
+</script>
+{% endblock %}

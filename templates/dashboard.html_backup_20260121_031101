@@ -1,0 +1,553 @@
+{% extends "bases.html" %}
+{% macro format_number(value) %}
+{{ "{:,}".format(value | int) }}
+{% endmacro %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+    <!-- Dashboard Header -->
+    <div class="mb-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+            <div>
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Welcome back, {{ user.firstName | default('User') }}!</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+                <div id="time-display" class="bg-blue-50 dark:bg-gray-700 px-3 py-1 rounded-lg text-blue-600 dark:text-blue-300 text-sm font-medium"></div>
+                <form method="GET" action="{{ url_for('dashboard') }}" class="flex w-full sm:w-auto">
+                    <input type="hidden" name="time" value="{{ time_filter }}">
+                    <input type="hidden" name="status" value="{{ status_filter }}">
+                    <input type="hidden" name="page" value="1">
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <div class="flex w-full">
+                        <input type="text" name="search" id="search-input" placeholder="Search orders..." class="p-2 border rounded-l-lg w-full dark:bg-gray-800 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value="{{ search }}">
+                        <button type="submit" class="p-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700 focus:outline-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </button>
+                        {% if search %}
+                        <a href="{{ url_for('dashboard', time=time_filter, status=status_filter, page=1, per_page=per_page) }}" class="ml-2 p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none text-sm">Clear</a>
+                        {% endif %}
+                    </div>
+                </form>
+                <div class="relative">
+                    <button id="notification-bell" class="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Modal -->
+
+    <!-- Main Stats Section -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <!-- Main Stats Column -->
+        <div class="sm:col-span-2 space-y-4 sm:space-y-6">
+            <!-- Total Sales Card -->
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 sm:p-6 rounded-xl shadow-lg relative overflow-hidden group hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
+                <div class="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white opacity-10 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10"></div>
+                <div class="flex items-center justify-between relative z-10">
+                    <div>
+                        <h3 class="text-base sm:text-lg font-medium text-blue-100">Today's Business Total Sales</h3>
+                        <p class="text-2xl sm:text-4xl font-bold mt-2">KSh {{ total_sales_today | round(2) | default(0) }}</p>
+                        <p class="text-blue-100 mt-2 text-xs sm:text-sm">
+                            Today's performance ({{ open_orders_count }} open, {{ closed_orders_count }} closed) - Resets daily
+                        </p>
+                    </div>
+                    <div class="bg-white bg-opacity-20 p-3 sm:p-4 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 sm:h-10 sm:w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Retail & Wholesale Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <!-- Retail Card -->
+                <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Walk-in Customers</h3>
+                            <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mt-1">KSh {{ retail_sales_today | round(2) | default(0) }}</p>
+                            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {{ retail_open_orders }} open, {{ retail_closed_orders }} closed - Includes app orders & partial payments
+                            </div>
+                        </div>
+                        <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wholesale Card -->
+                <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Business Clients</h3>
+                            <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mt-1">KSh {{ wholesale_sales_today | round(2) | default(0) }}</p>
+                            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {{ wholesale_open_orders }} open, {{ wholesale_closed_orders }} closed - Includes partial payments
+                            </div>
+                        </div>
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Side Stats Column -->
+        <div class="sm:col-span-2 lg:col-span-1 space-y-4 sm:space-y-6">
+            <!-- Debt Card -->
+            <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border-l-4 border-red-500 border-t border-r border-b border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Outstanding Debt</h3>
+                    <div class="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                </div>
+                <p class="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400 mt-3">KSh {{ total_debts | round(2) | default(0) }}</p>
+                <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">Total pending collections</div>
+            </div>
+
+            <!-- Expenses Card -->
+            <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border-l-4 border-purple-500 border-t border-r border-b border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Total Expenses</h3>
+                    <div class="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                    </div>
+                </div>
+                <p class="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400 mt-3">KSh {{ total_expenses | round(2) | default(0) }}</p>
+                <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">Business costs and expenses</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales History Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden mb-6 sm:mb-8">
+        <div class="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Sales History</h2>
+        </div>
+
+        <!-- Add after the "Sales History" h2 title -->
+<div class="flex justify-between items-center">
+    <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Sales History</h2>
+    <div class="flex gap-2">
+        <a href="{{ url_for('export_sales_data', format='pdf', time=time_filter or 'all', status=status_filter or 'all', search=search or '') }}" 
+           class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs sm:text-sm flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            PDF
+        </a>
+        <a href="{{ url_for('export_sales_data', format='docx', time=time_filter or 'all', status=status_filter or 'all', search=search or '') }}" 
+           class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs sm:text-sm flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            DOCX
+        </a>
+    </div>
+</div>
+
+        <!-- Filter Controls -->
+        <div class="p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-2 sm:gap-3 items-center">
+            <div class="flex flex-wrap gap-2 sm:space-x-2">
+                <a href="{{ url_for('dashboard', page=1, per_page=per_page, time=time_filter, search=search, status='all') }}" 
+                   class="px-3 sm:px-4 py-1 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors {% if status_filter == 'all' %}ring-2 ring-blue-200{% endif %}">
+                    All <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs">{{ total_orders }}</span>
+                </a>
+                <a href="{{ url_for('dashboard', page=1, per_page=per_page, time=time_filter, search=search, status='pending') }}" 
+                   class="px-3 sm:px-4 py-1 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors {% if status_filter == 'pending' %}ring-2 ring-red-200{% endif %}">
+                    Pending <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs">{{ pending_count }}</span>
+                </a>
+                <a href="{{ url_for('dashboard', page=1, per_page=per_page, time=time_filter, search=search, status='completed') }}" 
+                   class="px-3 sm:px-4 py-1 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors {% if status_filter == 'completed' %}ring-2 ring-green-200{% endif %}">
+                    Completed <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs">{{ completed_count }}</span>
+                </a>
+                <a href="{{ url_for('dashboard', page=1, per_page=per_page, time=time_filter, search=search, status='expenses') }}" 
+                   class="px-3 sm:px-4 py-1 sm:py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors {% if status_filter == 'expenses' %}ring-2 ring-purple-200{% endif %}">
+                    Expenses <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs">{{ expenses_count }}</span>
+                </a>
+                <a href="{{ url_for('dashboard', page=1, per_page=per_page, time=time_filter, search=search, status='gateway') }}" 
+                   class="px-3 sm:px-4 py-1 sm:py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs sm:text-sm font-bold flex items-center transition-all {% if status_filter == 'gateway' %}ring-2 ring-orange-300 bg-orange-700{% endif %}">
+                    Gateway <span class="ml-1 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs">{{ gateway_count | default(0) }}</span>
+                </a>
+            </div>
+            <div class="ml-auto flex items-center space-x-2 sm:space-x-3">
+                <label for="time-filter" class="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Time:</label>
+                <form method="GET" action="{{ url_for('dashboard') }}" style="display: inline;">
+                    <input type="hidden" name="status" value="{{ status_filter }}">
+                    <input type="hidden" name="search" value="{{ search }}">
+                    <input type="hidden" name="page" value="1">
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <select name="time" id="time-filter" onchange="this.form.submit()" class="py-1 sm:py-2 px-2 sm:px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm">
+                        <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All Time</option>
+                        <option value="day" {% if time_filter == 'day' %}selected{% endif %}>Daily</option>
+                        <option value="week" {% if time_filter == 'week' %}selected{% endif %}>Weekly</option>
+                        <option value="month" {% if time_filter == 'month' %}selected{% endif %}>Monthly</option>
+                        <option value="year" {% if time_filter == 'year' %}selected{% endif %}>Yearly</option>
+                    </select>
+                </form>
+            </div>
+        </div>
+
+        <!-- Combined Table Container -->
+        <div id="table-container" class="overflow-x-auto">
+            <!-- Gateway Payments Table -->
+            <!-- Gateway Payments Table -->
+            <table id="gateway-payments" class="{% if status_filter != 'gateway' %}hidden{% endif %} w-full min-w-[700px]">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Receipt ID</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Salesperson</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Payment Type</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Payment Date</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"></th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for group in gateway_payments %}
+                        {% if time_filter != 'all' %}
+                        <tr class="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-semibold">
+                            <td colspan="7" class="px-3 sm:px-6 py-2 text-xs sm:text-sm">
+                            {{ group.label }} (Total Payments: KSh {{ group.total | round(2) | default(0) }})
+                            {% if group.get('previous_orders_count', 0) > 0 %}
+                                <span class="ml-2 inline-block bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded-lg text-purple-800 dark:text-purple-200 text-xs">
+                                    +{{ group.previous_orders_count }} prev (KSh {{ group.previous_orders_amount | round(2) }})
+                                </span>
+                            {% endif %}
+                            </td>
+                        </tr>
+                    {% endif %}
+                    {% for payment in group.rows %}
+                        <tr class="{% if payment.get('is_old_order') %}bg-yellow-50 dark:bg-yellow-900 border-l-4 border-yellow-500{% else %}hover:bg-gray-50 dark:hover:bg-gray-700{% endif %} transition-colors">
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                {{ payment.receipt_id | default('N/A') }}
+                                {% if payment.get('is_old_order') %}
+                                <div class="mt-1">
+                                    <span class="inline-block bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 text-xs px-2 py-0.5 rounded-full font-semibold">
+                                        📅 Previous Order
+                                    </span>
+                                </div>
+                            {% endif %}
+                            </td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                                <div class="font-medium text-gray-900 dark:text-white text-sm">{{ payment.salesperson_name | default('Unknown') }}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">{{ payment.shop_name | default('Unknown') }}</div>
+                                {% if payment.get('order_date') %}
+                                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Ordered: {{ payment.order_date.strftime('%d/%m/%Y %H:%M') }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium {% if payment.payment_type == 'mpesa' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% else %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200{% endif %}">
+                                    {{ payment.payment_type | upper | default('N/A') }}
+                                </span>
+                            </td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            KSh {{ payment.payment | round(2) }}
+                            {% if payment.get('is_old_order') %}
+                                <div class="mt-1">
+                                    <span class="inline-block bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs px-2 py-0.5 rounded-full">
+                                        Paid: {{ payment.date.strftime('%H:%M:%S') }}
+                                    </span>
+                                </div>
+                            {% endif %}
+                            </td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-200">
+                                {{ payment.date.strftime('%d/%m/%Y %H:%M:%S') if payment.date else 'N/A' }}
+                            </td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium {% if payment.balance > 0 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200{% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                                    {% if payment.balance > 0 %}Partial{% else %}Complete{% endif %}
+                                </span>
+                            </td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-sm">
+                                <a href="{{ url_for('receipt', order_id=payment.receipt_id) }}" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">View</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Sales History Table -->
+<table id="sales-history" class="{% if status_filter == 'expenses' or status_filter == 'gateway' %}hidden{% endif %} w-full min-w-[700px]">
+    <thead class="bg-gray-50 dark:bg-gray-900">
+        <tr>
+            <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"></th>
+            <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Booked</th>
+            <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Closed</th>
+            <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+            <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total Amount</th>
+            <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+            <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"></th>
+        </tr>
+    </thead>
+    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+        {% for group in grouped_sales_history %}
+            <!-- Group Header with Stats -->
+            {% if time_filter != 'all' %}
+            <tr class="bg-blue-50 dark:bg-blue-900 text-gray-900 dark:text-white font-semibold">
+                <td colspan="7" class="px-3 sm:px-6 py-3 text-sm sm:text-base font-bold text-gray-800 dark:text-gray-200">
+                    {{ group.label }} 
+                    <div class="text-sm sm:text-base mt-2 font-semibold text-gray-700 dark:text-gray-300">
+                        <div class="flex flex-wrap gap-2 sm:gap-3 mt-2">
+                            <span class="inline-block bg-green-100 dark:bg-green-900 px-3 py-1 rounded-lg text-green-800 dark:text-green-200">
+                                Orders: {{ group.rows|length }}
+                            </span>
+                            <span class="inline-block bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-lg text-blue-800 dark:text-blue-200">
+                                Total: KSh {{ group.total | format_number }}
+                            </span>
+                            <span class="inline-block bg-yellow-100 dark:bg-yellow-900 px-3 py-1 rounded-lg text-yellow-800 dark:text-yellow-200">
+                                Debt: KSh {{ group.debt | format_number }}
+                            </span>
+                            <span class="inline-block bg-red-100 dark:bg-red-900 px-3 py-1 rounded-lg text-red-800 dark:text-red-200">
+                                Expenses: KSh {{ group.expenses | format_number }}
+                            </span>
+                            {% if group.get('previous_orders_closed_today', 0) > 0 %}
+                            <span class="inline-block bg-purple-100 dark:bg-purple-900 px-3 py-1 rounded-lg text-purple-800 dark:text-purple-200">
+                                +{{ group.previous_orders_closed_today }} prev (KSh {{ group.old_payments_in_period | format_number }})
+                            </span>
+                            {% endif %}
+                            <span class="inline-block bg-indigo-100 dark:bg-indigo-900 px-3 py-1 rounded-lg text-indigo-800 dark:text-indigo-200 font-bold border-2 border-indigo-300">
+                                NET: KSh {{ (group.total - group.debt - group.expenses) | format_number }}
+                            </span>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+            
+            <!-- Expenses for this group -->
+            {% if time_filter != 'all' and group.expenses_list %}
+                {% for expense in group.expenses_list %}
+                <tr class="bg-red-50 dark:bg-red-900 bg-opacity-30">
+                    <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-red-200 dark:bg-red-700 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-600 dark:text-red-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                    </td>
+                    <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <div class="font-medium text-red-700 dark:text-red-300 text-sm">EXPENSE</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ expense.description }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            {{ expense.date.strftime('%d/%m/%Y %H:%M:%S') }}
+                        </div>
+                    </td>
+                    <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-200">
+                        N/A
+                    </td>
+                    <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                            Expense
+                        </span>
+                    </td>
+                    <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-red-600 dark:text-red-400">
+                        -KSh {{ expense.amount | round(2) }}
+                    </td>
+                    <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                            {{ expense.category }}
+                        </span>
+                    </td>
+                    <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
+                        -
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endif %}
+            
+            {% for sale in group.rows %}
+            <tr class="{% if sale.get('is_old_order') %}bg-yellow-50 dark:bg-yellow-900 border-l-4 border-yellow-500{% elif sale.highlight %}bg-blue-50 dark:bg-blue-900{% endif %} hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                    <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                        {% if sale.photoUrl %}
+                            <img src="{{ sale.photoUrl }}" alt="Salesperson Photo" class="w-full h-full object-cover">
+                        {% else %}
+                            <div class="text-gray-700 dark:text-white font-bold text-base sm:text-lg">
+                                {{ sale.salesperson_name[0] | default('N') | upper }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                    <div class="font-medium text-gray-900 dark:text-white text-sm sm:text-base">
+                        {{ sale.salesperson_name | default('N/A') }}
+                        {% if sale.order_type == 'app' and sale.salesperson_name | lower == 'anonymous' %}
+                            <span class="inline-block bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-0.5 rounded-full">
+                                App User
+                            </span>
+                        {% endif %}
+                        {% if sale.get('is_old_order') %}
+                            <span class="inline-block bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100 text-xs px-2 py-0.5 rounded-full font-semibold ml-1">
+                                📅 Previous Order
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Location: {{ sale.shop_name }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                        Ordered: {{ sale.date.strftime('%d/%m/%Y %H:%M:%S') }}
+                    </div>
+                    {% if sale.notes %}
+                    <div class="mt-1">
+                        <span class="inline-block bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-0.5 rounded-full">
+                            Note: {{ sale.notes | truncate(20, True, '...') }}
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% set payment_made_today = false %}
+                    {% set payment_amount_today = 0 %}
+                    {% for payment_entry in sale.payment_history %}
+                        {% if payment_entry.date >= today_start and payment_entry.date < today_end %}
+                            {% set payment_made_today = true %}
+                            {% set payment_amount_today = payment_amount_today + payment_entry.amount %}
+                            <div class="mt-1">
+                                <span class="inline-block bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs px-2 py-0.5 rounded-full">
+                                    Paid Today: KSh {{ payment_entry.amount | round(2) }} at {{ payment_entry.date.strftime('%H:%M:%S') }}
+                                </span>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                    {% if sale.closed_date and sale.closed_date >= today_start and sale.closed_date < today_end and sale.balance <= 0 %}
+                    <div class="mt-1">
+                        <span class="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-0.5 rounded-full">
+                            Closed Today: {{ sale.closed_date.strftime('%H:%M:%S') }}
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% if payment_made_today %}
+                    <div class="mt-1 text-green-600 dark:text-green-400 text-xs">
+                        Total Paid Today: KSh {{ payment_amount_today | round(2) }}
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-200">
+                    {{ sale.closed_date.strftime('%d/%m/%Y %H:%M:%S') if sale.closed_date else 'Not Closed' }}
+                </td>
+                <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                    <span class="px-2 py-1 rounded-full text-xs font-medium {% if sale.order_type == 'retail' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% elif sale.order_type == 'app' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200{% else %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200{% endif %}">
+                        {{ sale.order_type | capitalize }}
+                    </span>
+                </td>
+                <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {{ sale.payment | round(2) }}/{{ (sale.payment + sale.balance) | round(2) }}
+                    {% if payment_made_today %}
+                    <div class="mt-1 text-green-600 dark:text-green-400 text-xs">(+{{ payment_amount_today | round(2) }} today)</div>
+                    {% endif %}
+                </td>
+                <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 rounded-full text-xs font-medium {% if sale.status == 'pending' or sale.balance > 0 %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                        {% if sale.status == 'pending' or sale.balance > 0 %}Pending{% else %}Paid{% endif %}
+                    </span>
+                </td>
+                <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                    <button class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none" onclick="toggleMenu('menu-{{ sale.receipt_id }}')">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                        </svg>
+                    </button>
+                    <div id="menu-{{ sale.receipt_id }}" class="hidden absolute right-0 mt-2 w-40 sm:w-48 bg-white dark:bg-gray-800 border rounded-lg shadow-lg z-20">
+                        <a href="{{ url_for('receipt', order_id=sale.receipt_id) }}" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs sm:text-sm">View Receipt</a>
+                        {% if sale.order_type == 'wholesale' %}
+                        <div class="relative">
+                            <a href="{{ url_for('load_to_loading_sheet', receipt_id=sale.receipt_id, action='current') }}" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs sm:text-sm">Add to Current Loading Sheet</a>
+                            <a href="{{ url_for('load_to_loading_sheet', receipt_id=sale.receipt_id, action='new') }}" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs sm:text-sm">Start New Loading Sheet</a>
+                        </div>
+                        {% endif %}
+                        {% if sale.balance > 0 %}
+                        <a href="#" onclick="showPaymentForm('{{ sale.receipt_id }}', '{{ sale.balance | round(2) }}')" class="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs sm:text-sm">Make Payment</a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        {% endfor %}
+    </tbody>
+</table>
+
+            <!-- Expenses Table -->
+            <table id="expenses-list" class="{% if status_filter != 'expenses' %}hidden{% endif %} w-full min-w-[600px]">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Description</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Category</th>
+                        <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in expenses %}
+                        {% if time_filter != 'all' %}
+                        <tr class="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-semibold">
+                            <td colspan="4" class="px-3 sm:px-6 py-2 text-xs sm:text-sm">
+                                {{ group.label }} (Total Expenses: KSh {{ group.total | round(2) | default(0) }})
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% for expense in group.rows %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-200">{{ expense.description | default('N/A') }}</td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-red-600 dark:text-red-300">KSh {{ expense.amount | round(2) }}</td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-200">{{ expense.category | default('N/A') }}</td>
+                            <td class="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-200">{{ expense.date.strftime('%d/%m/%Y') if expense.date else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {% if total_items == 0 %}
+            <div class="p-6 sm:p-8 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p class="mt-4 text-gray-600 dark:text-gray-400 text-base sm:text-lg">No data found for the selected filter</p>
+                <p class="text-gray-500 dark:text-gray-500 text-xs sm:text-sm mt-2">Try changing your filter criteria</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Payment Modal -->
+
+        <!-- Pagination Controls -->
+        <div class="p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                Showing {{ (page - 1) * per_page + 1 }} to {{ [page * per_page, total_items]|min }} of {{ total_items }} 
+                {% if status_filter == 'gateway' %}gateway payments{% elif status_filter == 'expenses' %}expenses{% else %}orders{% endif %}
+            </span>
+            <div class="flex items-center space-x-2">
+                {% if page > 1 %}
+                <a href="{{ url_for('dashboard', page=page-1, per_page=per_page, time=time_filter, search=search, status=status_filter) }}" class="px-3 sm:px-4 py-1 sm:py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-xs sm:text-sm">Previous</a>
+                {% endif %}
+                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">Page {{ page }} of {{ total_pages }}</span>
+                {% if page < total_pages %}
+                <a href="{{ url_for('dashboard', page=page+1, per_page=per_page, time=time_filter, search=search, status=status_filter) }}" class="px-3 sm:px-4 py-1 sm:py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-xs sm:text-sm">Next</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+{% endblock %}

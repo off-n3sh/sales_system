@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        .error-message { color: #d32f2f; }
+    </style>
+</head>
+<body>
+    <h1>Oops! Something Went Wrong</h1>
+    <p class="error-message">{{ message }}</p>
+    <a href="{{ url_for('orders') }}">Return to Orders</a>
+</body>
+</html>

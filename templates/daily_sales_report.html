@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Sales Report - {{ date }}</title>
+    <style>
+        @media print {
+            body { margin: 0; padding: 10px; }
+            .no-print { display: none; }
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            max-width: 320px;
+            margin: 0 auto;
+            padding: 15px;
+            background: #fff;
+            color: #000;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        
+        .report-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin: 8px 0;
+        }
+        
+        .date-time {
+            font-size: 11px;
+            margin: 4px 0;
+        }
+        
+        .orders-processed {
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+        
+        .section {
+            margin: 20px 0;
+            border-bottom: 1px solid #000;
+            padding-bottom: 10px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 8px;
+            text-decoration: underline;
+        }
+        
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            font-size: 11px;
+        }
+        
+        .item-row.indent {
+            padding-left: 15px;
+            font-size: 10px;
+        }
+        
+        .subtotal {
+            border-top: 1px solid #000;
+            margin-top: 5px;
+            padding-top: 3px;
+            font-weight: bold;
+        }
+        
+        .totals {
+            background: #f5f5f5;
+            padding: 12px;
+            margin: 20px 0;
+            border: 2px solid #000;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .final-total {
+            border-top: 2px solid #000;
+            padding-top: 8px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .print-btn:hover {
+            background: #000;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 10px;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+        }
+        
+        .signature-line {
+            margin-top: 20px;
+            border-bottom: 1px solid #000;
+            width: 150px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">Print Report</button>
+    
+    <div class="header">
+        <div class="company-name">DREAMLAND DISTRIBUTORS</div>
+        <div class="report-title">DAY SALES REPORT</div>
+        <div class="date-time">{{ date }} - {{ time_generated }}</div>
+        <div class="orders-processed">Orders Processed: {{ orders_count }}</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">SALES BREAKDOWN</div>
+        
+        <div class="item-row">
+            <div><strong>WHOLESALE</strong></div>
+            <div></div>
+        </div>
+        <div class="item-row indent">
+            <div>Total Revenue:</div>
+            <div>{{ total_wholesale_revenue|round(2) }} KES</div>
+        </div>
+        <div class="item-row indent">
+            <div>Paid Orders:</div>
+            <div>{{ total_wholesale_paid|round(2) }} KES</div>
+        </div>
+        
+        <div class="item-row" style="margin-top: 10px;">
+            <div><strong>RETAIL</strong></div>
+            <div></div>
+        </div>
+        <div class="item-row indent">
+            <div>Total Revenue:</div>
+            <div>{{ total_retail_revenue|round(2) }} KES</div>
+        </div>
+        <div class="item-row indent">
+            <div>Paid Orders:</div>
+            <div>{{ total_retail_paid|round(2) }} KES</div>
+        </div>
+        
+        <div class="item-row subtotal" style="margin-top: 10px;">
+            <div>TOTAL SALES:</div>
+            <div>{{ total_sales|round(2) }} KES</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">PAYMENT METHODS</div>
+        <div class="item-row">
+            <div>M-Pesa Payments:</div>
+            <div>{{ total_mpesa|round(2) }} KES</div>
+        </div>
+        <div class="item-row">
+            <div>Cash Payments:</div>
+            <div>{{ total_cash|round(2) }} KES</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">OUTSTANDING DEBT</div>
+        <div class="item-row">
+            <div>Total Outstanding:</div>
+            <div>{{ total_debt|round(2) }} KES</div>
+        </div>
+    </div>
+
+    <div class="totals">
+        <div class="total-row">
+            <div>TOTAL SALES:</div>
+            <div>{{ total_sales|round(2) }} KES</div>
+        </div>
+        <div class="total-row">
+            <div>TOTAL EXPENSES:</div>
+            <div>{{ total_expenses|round(2) }} KES</div>
+        </div>
+        <div class="total-row final-total">
+            <div>NET SALE:</div>
+            <div>{{ net|round(2) }} KES</div>
+        </div>
+    </div>
+
+    <div class="signature-line"></div>
+    
+    <div class="footer">
+        <div>END OF REPORT</div>
+        <div style="margin-top: 5px;">System Generated by SysAdmin</div>
+        <div>{{ date }} {{ time_generated }}</div>
+    </div>
+</body>
+</html>
