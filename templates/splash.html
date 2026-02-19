@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dreamland Enterprises - Welcome</title>
+    <link href="{{ url_for('static', filename='css/tailwind.min.css') }}" rel="stylesheet">
+</head>
+<body class="bg-blue-100 min-h-screen flex items-center justify-center overflow-hidden relative">
+    <!-- Background with gradient overlay -->
+    <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-100 opacity-90"></div>
+    
+    <!-- Animated particles -->
+    <div id="particles-js" class="absolute inset-0"></div>
+
+    <!-- Main content container -->
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 z-10">
+        <div class="text-center text-gray-800">
+            <div class="animate-slide-down">
+                <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold mb-2">Dreamland Enterprises</h1>
+                <div class="h-1 w-24 sm:w-32 bg-blue-500 mx-auto my-4 rounded-full"></div>
+            </div>
+            
+            <div class="animate-fade-in-delay">
+                <p class="text-xl sm:text-2xl mb-6">Premium Wholesale Solutions for Your Business</p>
+                <p class="text-base sm:text-lg mb-8 sm:mb-10 max-w-2xl mx-auto">We connect businesses with the best products at unbeatable prices. Streamline your supply chain and boost your profits with our extensive catalog.</p>
+            </div>
+            
+            <button id="get-started" class="animate-pulse-slow bg-blue-500 text-white py-2 px-6 sm:py-3 sm:px-10 rounded-lg hover:bg-blue-600 transition-all duration-300 transform hover:scale-105 font-bold text-base sm:text-lg shadow-lg">
+                Get Started
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading counter -->
+    <div class="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 text-gray-800 text-xs sm:text-sm opacity-60 z-10">
+        <span>Redirecting in </span><span id="countdown">3</span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/particles.min.js') }}"></script>
+    <script>
+        // Particle.js configuration
+        particlesJS("particles-js", {
+            particles: {
+                number: { value: 80, density: { enable: true, value_area: 800 } },
+                color: { value: "#ffffff" },
+                opacity: { value: 0.5, random: true },
+                size: { value: 3, random: true },
+                line_linked: {
+                    enable: true,
+                    distance: 150,
+                    color: "#ffffff",
+                    opacity: 0.2,
+                    width: 1
+                },
+                move: {
+                    enable: true,
+                    speed: 2,
+                    direction: "none",
+                    random: true,
+                    out_mode: "out"
+                }
+            }
+        });
+
+        // Countdown and redirect
+        let seconds = 6000;
+        const countdownEl = document.getElementById("countdown");
+        const countdown = setInterval(() => {
+            seconds--;
+            countdownEl.textContent = seconds;
+            if (seconds <= 0) {
+                clearInterval(countdown);
+                window.location.href = "{{ url_for('auth') }}";
+            }
+        }, 1000);
+
+        // Button click handler
+        document.getElementById("get-started").addEventListener("click", () => {
+            clearInterval(countdown);
+            window.location.href = "{{ url_for('auth') }}";
+        });
+    </script>
+    
+    <style>
+        /* Custom animations */
+        @keyframes fadeIn { 
+            from { opacity: 0; } 
+            to { opacity: 1; } 
+        }
+        
+        @keyframes slideDown { 
+            from { opacity: 0; transform: translateY(-50px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        
+        @keyframes pulseSlow { 
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        
+        .animate-fade-in { 
+            animation: fadeIn 1.5s ease-in-out;
+        }
+        
+        .animate-fade-in-delay { 
+            opacity: 0;
+            animation: fadeIn 1.5s ease-in-out forwards;
+            animation-delay: 0.5s;
+        }
+        
+        .animate-slide-down { 
+            opacity: 0;
+            animation: slideDown 1s ease-out forwards;
+        }
+        
+        .animate-pulse-slow {
+            animation: pulseSlow 2s infinite;
+        }
+    </style>
+</body>
+</html>

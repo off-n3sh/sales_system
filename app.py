@@ -1,8 +1,7 @@
 """
 DREAMLAND ZERO - DISTRIBUTED FLASK APPLICATION
-MongoDB Replica Set with Dynamic Admin Election & Failover
-"""
 
+"""
 # ════════════════════════════════════════════════════════════
 # IMPORTS
 # ════════════════════════════════════════════════════════════
@@ -198,85 +197,6 @@ def get_db():
     """Helper function to get the main database"""
     return db
 
-# ════════════════════════════════════════════════════════════
-# SYNC & MERGE ENGINE (INTEGRATED)
-# ════════════════════════════════════════════════════════════
-def get_order_diff():
-    """Finds new orders and updated payment histories on the peer node"""
-    if not db_manager.peer_online:
-        log.warning(f"📡 Sync Attempt: Peer {Config.PEER_HOST} is offline.")
-        return []
-
-    diff_list = []
-    try:
-        peer_uri = Config.get_uri(Config.PEER_HOST)
-        # Use a short timeout so the web app doesn't hang
-        with MongoClient(peer_uri, serverSelectionTimeoutMS=3000) as p_cli:
-            p_db = p_cli[Config.DB_NAME]
-            peer_orders = list(p_db['orders'].find())
-            
-            for p_order in peer_orders:
-                rid = p_order.get('receipt_id')
-                local_order = orders_collection.find_one({"receipt_id": rid})
-                
-                if not local_order:
-                    # Logic: Record is entirely missing locally
-                    diff_list.append({
-                        'type': 'NEW_ORDER',
-                        'id': rid,
-                        'client': p_order.get('shop_name'),
-                        'amount': p_order.get('payment'),
-                        'data': p_order
-                    })
-                else:
-                    # Logic: Check if peer has more payments (update occurred there)
-                    p_hist = p_order.get('payment_history', [])
-                    l_hist = local_order.get('payment_history', [])
-                    if len(p_hist) > len(l_hist):
-                        diff_list.append({
-                            'type': 'PAYMENT_UPDATE',
-                            'id': rid,
-                            'client': p_order.get('shop_name'),
-                            'amount': p_order.get('payment'),
-                            'data': p_order
-                        })
-        return diff_list
-    except Exception as e:
-        log.error(f"❌ Diff Engine Error: {e}")
-        return []
-
-def execute_merge(changes):
-    """The actual writing process - used by your future UI button"""
-    admin_user = session.get('user', {}).get('first_name', 'Admin')
-    log.info(f"🔄 MERGE STARTED by {admin_user}")
-    
-    success_count = 0
-    for item in changes:
-        try:
-            # Remove Peer ID to avoid DuplicateKey errors locally
-            if '_id' in item['data']: 
-                del item['data']['_id']
-            
-            if item['type'] == 'NEW_ORDER':
-                orders_collection.insert_one(item['data'])
-            else:
-                # Update existing order with the Peer's fresher payment data
-                orders_collection.update_one(
-                    {"receipt_id": item['id']},
-                    {"$set": {
-                        "payment_history": item['data']['payment_history'],
-                        "balance": item['data']['balance'],
-                        "pending_payment": item['data']['pending_payment'],
-                        "closed_date": item['data'].get('closed_date'),
-                        "tracking": item['data'].get('tracking')
-                    }}
-                )
-            success_count += 1
-        except Exception as e:
-            log.error(f"❌ Failed to merge record {item['id']}: {e}")
-            
-    log.info(f"🚀 MERGE COMPLETE: {success_count} records synchronized.")
-    return success_count
 
 # ════════════════════════════════════════════════════════════
 # BACKUP & SCHEDULER
@@ -384,58 +304,41 @@ def is_mongod_running():
     except subprocess.CalledProcessError:
         return False
 
+
+# ============================================================================
+# SESSION CONFIGURATION
+# ============================================================================
+
+# Set session lifetime to 6 hours
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=6)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+
+# Force logout flag
+FORCE_LOGOUT_FLAG_FILE = 'force_logout.lock'
+
+def is_force_logout_active():
+    """Check if admin has triggered force logout for all users"""
+    return os.path.exists(FORCE_LOGOUT_FLAG_FILE)
+
+def trigger_force_logout():
+    """Admin function: Create flag to force all users to logout"""
+    with open(FORCE_LOGOUT_FLAG_FILE, 'w') as f:
+        f.write(str(datetime.now()))
+
+def clear_force_logout():
+    """Admin function: Remove force logout flag"""
+    if os.path.exists(FORCE_LOGOUT_FLAG_FILE):
+        os.remove(FORCE_LOGOUT_FLAG_FILE)
+
 # ════════════════════════════════════════════════════════════
 # AUDIT & SESSION TRACKING
 # ════════════════════════════════════════════════════════════
-def create_session(username, source_ip, auth_db="admin"):
-    """
-    Creates a non-repudiable session record.
-    Must be called at authentication time.
-    """
-    session_id = str(uuid.uuid4())
 
-    audit_db.sessions.insert_one({
-        "session_id": session_id,
-        "username": username,
-        "auth_db": auth_db,
-        "source_ip": source_ip,
-        "login_time": datetime.utcnow(),
-        "logout_time": None,
-        "active": True,
-        "password_retries": 0,
-        "server": "offsec"
-    })
-
-    return session_id
-
-def end_session(session_id):
-    """
-    Called on logout or admin termination.
-    """
-    audit_db.sessions.update_one(
-        {"session_id": session_id},
-        {"$set": {
-            "logout_time": datetime.utcnow(),
-            "active": False
-        }}
-    )
-
-# ════════════════════════════════════════════════════════════
-# COMMAND LOGGING
-# ════════════════════════════════════════════════════════════
-from pymongo import monitoring
-
-class CommandLogger(monitoring.CommandListener):
-    def started(self, event):
-        audit_db.operations.insert_one({
-            "session_id": event.command.get("lsid"),
-            "db": event.database_name,
-            "operation": event.command_name,
-            "timestamp": datetime.utcnow()
-        })
-
-monitoring.register(CommandLogger())
-
+from admin_routes import admin_bp, register_activity_tracker
+app.register_blueprint(admin_bp)
+register_activity_tracker(app)
+db['session_logs'].create_index([("email", 1), ("timestamp", -1)])
+db['session_logs'].create_index([("action", 1), ("timestamp", -1)])
 
 
 # ============================================================
@@ -1385,9 +1288,6 @@ def process_order(doc):
         'user_id': order_dict.get('user_id', '')
     }
 
-
-
-
 def format_currency(value):
     try:
         return f"{float(value):,.2f}"  # Format as currency with 2 decimal places
@@ -1443,8 +1343,7 @@ def expire_date_days_left(date_str):
         return max(days_left, 0)  # Ensure no negative days
     except (ValueError, TypeError):
         return None
-
-NAIROBI_TZ = pytz.timezone('Africa/Nairobi')  
+ 
 def process_date(date_value):
     """Convert a date value to a datetime object in Nairobi timezone."""
     try:
@@ -1485,729 +1384,6 @@ def process_date(date_value):
     except Exception as e:
         logger.error(f"Error processing date: {str(e)} - value: {date_value}")
         return None
-
-
-# ============================================================================
-# SESSION CONFIGURATION
-# ============================================================================
-
-# Set session lifetime to 6 hours
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=6)
-app.config['SESSION_REFRESH_EACH_REQUEST'] = True
-
-# Force logout flag
-FORCE_LOGOUT_FLAG_FILE = 'force_logout.lock'
-
-def is_force_logout_active():
-    """Check if admin has triggered force logout for all users"""
-    return os.path.exists(FORCE_LOGOUT_FLAG_FILE)
-
-def trigger_force_logout():
-    """Admin function: Create flag to force all users to logout"""
-    with open(FORCE_LOGOUT_FLAG_FILE, 'w') as f:
-        f.write(str(datetime.now()))
-
-def clear_force_logout():
-    """Admin function: Remove force logout flag"""
-    if os.path.exists(FORCE_LOGOUT_FLAG_FILE):
-        os.remove(FORCE_LOGOUT_FLAG_FILE)
-
-# ============================================================================
-# SESSION ACTIVITY TRACKER
-# ============================================================================
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Check application and database health"""
-    try:
-        db_manager.client.admin.command('ping')
-        return jsonify({
-            'status': 'healthy',
-            'database': {
-                'connected': True,
-                'host': Config.MY_HOST,
-                'peer_online': db_manager.peer_online,
-                'mode': 'STANDALONE'
-            },
-            'timestamp': datetime.now(NAIROBI_TZ).isoformat()
-        }), 200
-    except Exception as e:
-        return jsonify({'status': 'unhealthy', 'error': str(e)}), 503
-    
-@app.route('/')
-def splash():
-    if 'user' in session:
-        return redirect(url_for('dashboard'))
-    return render_template('splash.html')
-
-
-@app.before_request
-def track_user_activity():
-    """
-    Track user activity and check session validity
-    - Updates last_activity timestamp on every request
-    - Checks if session expired (6 hours of inactivity)
-    - Checks if admin triggered force logout
-    """
-    # Skip for static files, auth, and splash pages
-    if request.endpoint and request.endpoint in ['static', 'auth', '/']:
-        return
-    
-    # Check if user is logged in
-    if 'user' not in session:
-        return
-    
-    # === CHECK 1: Force Logout Flag ===
-    if is_force_logout_active():
-        user_email = session.get('user', {}).get('email', 'unknown')
-        
-        # Log forced logout
-        db['session_logs'].insert_one({
-            'email': user_email,
-            'action': 'forced_logout',
-            'reason': 'admin_triggered',
-            'timestamp': datetime.now(NAIROBI_TZ),
-            'ip_address': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent')
-        })
-        
-        session.clear()
-        flash('Your session has been terminated. Please log in again.', 'warning')
-        return redirect(url_for('auth'))
-    
-    # === CHECK 2: Session Expiry (6 hours inactivity) ===
-    now = datetime.now(NAIROBI_TZ)
-    last_activity = session.get('last_activity')
-    
-    if last_activity:
-        if isinstance(last_activity, str):
-            last_activity = datetime.fromisoformat(last_activity)
-        
-        time_elapsed = now - last_activity
-        if time_elapsed > timedelta(hours=6):
-            user_email = session.get('user', {}).get('email', 'unknown')
-            
-            # Log session expiry
-            db['session_logs'].insert_one({
-                'email': user_email,
-                'action': 'session_expired',
-                'reason': 'inactivity_6_hours',
-                'last_activity': last_activity,
-                'timestamp': now,
-                'ip_address': request.remote_addr,
-                'user_agent': request.headers.get('User-Agent')
-            })
-            
-            session.clear()
-            flash('Your session expired due to inactivity. Please log in again.', 'info')
-            return redirect(url_for('auth', next=request.url))
-    
-    # === UPDATE: Store current activity time ===
-    session['last_activity'] = now.isoformat()
-    session.permanent = True
-
-# ============================================================================
-# LOGIN REQUIRED DECORATOR
-# ============================================================================
-
-def login_required(f):
-    """Enhanced login_required decorator"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user' not in session:
-            flash('Please log in to access this page.', 'warning')
-            return redirect(url_for('auth', next=request.url))
-        return f(*args, **kwargs)
-    return decorated_function
-
-# ============================================================================
-# AUTHENTICATION ROUTE (Enhanced)
-# ============================================================================
-
-@app.route('/auth', methods=['GET', 'POST'])
-def auth():
-    """
-    Unified authentication endpoint for login and signup
-    - Handles form validation
-    - Tracks login attempts
-    - **NEW: Tracks last_login timestamps**
-    """
-    if 'user' in session:
-        return redirect(url_for('dashboard'))
-    
-    if request.method == 'POST':
-        form_type = request.form.get('form_type')
-        
-        # ========================================
-        # SIGNUP FLOW
-        # ========================================
-        if form_type == 'signup':
-            email = request.form.get('email')
-            first_name = request.form.get('first_name')
-            last_name = request.form.get('last_name')
-            phone = request.form.get('phone')
-            password = request.form.get('password')
-            confirm_password = request.form.get('confirmPassword')
-            role = request.form.get('role', 'user')
-
-            print(f"DEBUG first_name: {repr(first_name)}")
-            print(f"DEBUG last_name: {repr(last_name)}")
-
-            # Server-side validation
-            if not first_name or not last_name:
-                return jsonify({"status": "error", "error": "Name fields are required"}), 400
-            
-            if not re.match(r"^[A-Za-z]+$", first_name) or not re.match(r"^[A-Za-z]+$", last_name):
-                return jsonify({"status": "error", "error": "Names must contain only letters"}), 400
-            
-            if password != confirm_password:
-                return jsonify({"status": "error", "error": "Passwords don't match."}), 400
-            
-            if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-                return jsonify({"status": "error", "error": "Invalid email format."}), 400
-            
-            if not re.match(r"[0-9]{10,15}", phone):
-                return jsonify({"status": "error", "error": "Phone number should be 10-15 digits."}), 400
-            
-            if not re.match(r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}", password):
-                return jsonify({"status": "error", "error": "Password must be at least 8 characters, including a number, an uppercase letter, and a lowercase letter."}), 400
-            
-            try:
-                # Check if email exists
-                if users_collection.find_one({"email": email}):
-                    return jsonify({"status": "error", "error": "Email already exists. Try logging in."}), 400
-                
-                # Hash password and create user
-                hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-                users_collection.insert_one({
-                    "email": email,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "phone": phone,
-                    "password": hashed_password,
-                    "role": role,
-                    "status": "pending",
-                    "created_at": datetime.now(NAIROBI_TZ),
-                    "last_login": None,  # 🆕 NEW: Initialize last_login
-                    "login_history": []  # 🆕 NEW: Track login history
-                })
-                
-                # Log signup
-                db['session_logs'].insert_one({
-                    'email': email,
-                    'action': 'signup',
-                    'timestamp': datetime.now(NAIROBI_TZ),
-                    'ip_address': request.remote_addr,
-                    'user_agent': request.headers.get('User-Agent')
-                })
-                
-                return jsonify({
-                    "status": "success",
-                    "message": "Signup successful! Please log in."
-                }), 200
-                
-            except Exception as e:
-                return jsonify({"status": "error", "error": f"Signup failed: {str(e)}"}), 500
-        
-        # ========================================
-        # LOGIN FLOW (🆕 ENHANCED)
-        # ========================================
-        elif form_type == 'login':
-            email = request.form.get('email')
-            password = request.form.get('password')
-            
-            try:
-                user = users_collection.find_one({"email": email})
-                
-                # Check if user exists
-                if not user:
-                    # Log failed attempt
-                    db['session_logs'].insert_one({
-                        'email': email,
-                        'action': 'login_failed',
-                        'reason': 'user_not_found',
-                        'timestamp': datetime.now(NAIROBI_TZ),
-                        'ip_address': request.remote_addr,
-                        'user_agent': request.headers.get('User-Agent')
-                    })
-                    return jsonify({"status": "error", "error": "No account with that email."}), 401
-                
-                # Check password
-                if not check_password_hash(user["password"], password):
-                    # Log failed attempt
-                    db['session_logs'].insert_one({
-                        'email': email,
-                        'action': 'login_failed',
-                        'reason': 'wrong_password',
-                        'timestamp': datetime.now(NAIROBI_TZ),
-                        'ip_address': request.remote_addr,
-                        'user_agent': request.headers.get('User-Agent')
-                    })
-                    return jsonify({"status": "error", "error": "Wrong password. Try again."}), 401
-                
-                # 🆕 NEW: Capture previous last_login before updating
-                previous_last_login = user.get('last_login')
-                current_login_time = datetime.now(NAIROBI_TZ)
-                
-                # 🆕 NEW: Update user's last_login in database
-                users_collection.update_one(
-                    {"_id": user["_id"]},
-                    {
-                        "$set": {"last_login": current_login_time},
-                        "$push": {
-                            "login_history": {
-                                "timestamp": current_login_time,
-                                "ip_address": request.remote_addr,
-                                "user_agent": request.headers.get('User-Agent')
-                            }
-                        }
-                    }
-                )
-                
-                # Initialize session
-                session['user'] = {
-                    "first_name": user.get("first_name"),
-                    "last_name": user.get("last_name"),
-                    "email": user.get("email"),
-                    "role": user.get("role", "user"),
-                    "user_id": str(user["_id"])
-                }
-                session['last_activity'] = current_login_time.isoformat()
-                session['login_time'] = current_login_time.isoformat()
-                session['previous_last_login'] = previous_last_login.isoformat() if previous_last_login else None  # 🆕 NEW
-                session.permanent = True
-                
-                # Log successful login
-                db['session_logs'].insert_one({
-                    'email': email,
-                    'action': 'login_success',
-                    'timestamp': current_login_time,
-                    'ip_address': request.remote_addr,
-                    'user_agent': request.headers.get('User-Agent'),
-                    'previous_login': previous_last_login  # 🆕 NEW: Track previous login
-                })
-                
-                # Redirect to intended page or dashboard
-                next_page = request.args.get('next', url_for('dashboard'))
-                return jsonify({
-                    "status": "success",
-                    "message": "Login successful!",
-                    "redirect": next_page
-                }), 200
-                
-            except Exception as e:
-                return jsonify({"status": "error", "error": f"Login failed: {str(e)}"}), 500
-    
-    return render_template('auth.html', signup_success=request.args.get('signup_success', False))
-
-# ============================================================================
-# LOGOUT ROUTE (Enhanced with Logging)
-# ============================================================================
-
-
-
-
-@app.route('/logout')
-def logout():
-    """
-    Enhanced logout with comprehensive session tracking.
-    
-    Handles:
-    - Manual logout (user clicks button)
-    - Abnormal termination detection (power loss, crashes)
-    - Session duration tracking
-    - Clean session cleanup
-    """
-    current_user = get_current_user()
-    
-    if current_user:
-        user_email = current_user.get('email', 'unknown')
-        login_time_str = session.get('login_time')
-        now = datetime.now(NAIROBI_TZ)
-        
-        # Calculate session duration
-        session_duration = None
-        if login_time_str:
-            try:
-                login_time = datetime.fromisoformat(login_time_str)
-                session_duration = (now - login_time).total_seconds() / 60  # minutes
-            except:
-                pass
-        
-        # Log manual logout
-        db['session_logs'].insert_one({
-            'email': user_email,
-            'action': 'logout',
-            'logout_type': 'manual',  # User explicitly clicked logout
-            'session_duration_minutes': session_duration,
-            'timestamp': now,
-            'ip_address': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent')
-        })
-        
-        session.clear()
-        flash('You have been logged out successfully.', 'success')
-    
-    return redirect(url_for('splash'))
-
-
-
-# ============================================================================
-# SESSION MONITORING (Detects abnormal session ends)
-# ============================================================================
-
-@app.before_request
-def detect_abnormal_session_end():
-    """
-    Detects abnormal session terminations BEFORE processing any request.
-    
-    Scenarios handled:
-    - Power failure (user returns after unexpected shutdown)
-    - Server restart (app reload, code changes)
-    - Browser crash (closed without logout)
-    - Session timeout
-    
-    How it works:
-    - Checks if there's an "open" login without a corresponding logout
-    - If found, logs it as 'abnormal_termination'
-    """
-    # Skip for static files and auth routes
-    if request.endpoint in ['static', 'auth', 'splash']:
-        return
-    
-    current_user = get_current_user()
-    
-    if current_user:
-        user_email = current_user.get('email')
-        
-        # Check for unclosed sessions
-        last_log = db['session_logs'].find_one(
-            {"email": user_email},
-            sort=[("timestamp", -1)]
-        )
-        
-        if last_log:
-            last_action = last_log.get('action')
-            
-            # If last action was login but no logout, previous session ended abnormally
-            if last_action == 'login_success':
-                login_time = last_log.get('timestamp')
-                current_login_time_str = session.get('login_time')
-                
-                # Compare timestamps to detect if this is a NEW session
-                if current_login_time_str:
-                    current_login_time = datetime.fromisoformat(current_login_time_str)
-                    
-                    # If stored login time doesn't match last DB login, log abnormal end
-                    if login_time and login_time != current_login_time:
-                        db['session_logs'].insert_one({
-                            'email': user_email,
-                            'action': 'logout',
-                            'logout_type': 'abnormal',  # Power loss, crash, etc.
-                            'session_duration_minutes': None,  # Unknown
-                            'timestamp': datetime.now(NAIROBI_TZ),
-                            'detected_at': 'before_request',
-                            'previous_login': login_time,
-                            'ip_address': request.remote_addr,
-                            'user_agent': request.headers.get('User-Agent')
-                        })
-
-
-# ============================================================================
-# ADMIN: View Session Logs
-# ============================================================================
-def get_current_user():
-    """
-    Safely retrieve current user from session with fallback logic.
-    Handles both session structures and prevents KeyError.
-    
-    Returns:
-        dict: User data with email, first_name, last_name, role
-        None: If no valid session exists
-    """
-    # Try nested structure first (from login route)
-    user = session.get('user')
-    if user and isinstance(user, dict):
-        return user
-    
-    # Fallback: Try direct email key (legacy/old sessions)
-    email = session.get('email')
-    if email:
-        return {'email': email}
-    
-    # No valid session
-    return None
-
-@app.route('/dashboard', methods=['GET'])
-def dashboard():
-    """
-    Main dashboard with robust session handling.
-    Handles all edge cases: power loss, crashes, reloads.
-    """
-    # 🆕 Use helper function for consistent session access
-    current_user = get_current_user()
-    
-    if not current_user:
-        flash('Please log in to continue.', 'warning')
-        return redirect(url_for('auth'))
-    
-    user_email = current_user.get('email')
-    
-    # Fetch full user data from database
-    user_data = db.users.find_one({"email": user_email})
-    
-    if not user_data:
-        session.clear()
-        flash('User account not found. Please log in again.', 'error')
-        return redirect(url_for('auth'))
-    
-    # 🆕 Get last login (skip current session, get previous one)
-    last_log = db.session_logs.find({
-        "email": user_email, 
-        "action": "login_success"
-    }).sort("timestamp", -1).skip(1).limit(1)
-    
-    last_log_list = list(last_log)
-    last_login_timestamp = last_log_list[0]['timestamp'] if last_log_list else None
-    
-    search_query = request.args.get('search', '').strip()
-    
-    # Set today's date range
-    now = datetime.now(NAIROBI_TZ)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-    
-    # Fetch orders and retail collection
-    all_orders = list(orders_collection.find().sort('date', -1))
-    retail_collection = list(db["retail"].find({"date": now.strftime('%Y-%m-%d')}))
-    
-    # Calculate dashboard stats
-    stats = calculate_dashboard_stats(all_orders, retail_collection, today_start, today_end)
-    
-    # Calculate additional metrics
-    total_orders = len(all_orders)
-    pending_count = sum(1 for order in all_orders if float(order.get('balance', 0)) > 0)
-    completed_count = sum(1 for order in all_orders if float(order.get('balance', 0)) <= 0.001)
-    
-    # Today's debt (orders created today with balance)
-    todays_debt = sum(
-        float(order.get('balance', 0)) 
-        for order in all_orders 
-        if process_date(order.get('date')) >= today_start and 
-           process_date(order.get('date')) < today_end and 
-           float(order.get('balance', 0)) > 0
-    )
-    
-    return render_template(
-        'dashboard.html',
-        user=user_data,
-        now=now,
-        last_login_timestamp=last_login_timestamp,
-        total_sales_today=stats['total_sales_today'],
-        retail_sales_today=stats['retail_sales_today'],
-        wholesale_sales_today=stats['wholesale_sales_today'],
-        total_debt=stats['total_debt'],  # 🆕 Changed from total_debts for consistency
-        total_expenses=stats.get('total_expenses', 0),  # 🆕 Added
-        open_orders_count=stats['open_orders_count'],
-        closed_orders_count=stats['closed_orders_count'],
-        retail_open_orders=stats['retail_open_orders'],
-        retail_closed_orders=stats['retail_closed_orders'],
-        wholesale_open_orders=stats['wholesale_open_orders'],
-        wholesale_closed_orders=stats['wholesale_closed_orders'],
-        todays_debt=todays_debt,
-        search=search_query,
-    )
-
-
-
-@app.route('/api/dashboard/stats', methods=['GET'])
-def get_dashboard_stats():
-    """
-    API endpoint to fetch real-time dashboard statistics.
-    Used by JavaScript to update cards dynamically.
-    
-    Returns:
-        JSON with all dashboard metrics
-    """
-    try:
-        current_user = get_current_user()
-        
-        if not current_user:
-            return jsonify({"error": "Unauthorized"}), 401
-        
-        # Get today's date range
-        now = datetime.now(NAIROBI_TZ)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = today_start + timedelta(days=1)
-        
-        # Fetch orders and retail collection
-        all_orders = list(orders_collection.find().sort('date', -1))
-        retail_collection = list(db["retail"].find({"date": now.strftime('%Y-%m-%d')}))
-        
-        # Calculate stats
-        stats = calculate_dashboard_stats(all_orders, retail_collection, today_start, today_end)
-        
-        # Calculate today's debt
-        todays_debt = sum(
-            float(order.get('balance', 0)) 
-            for order in all_orders 
-            if process_date(order.get('date')) >= today_start and 
-               process_date(order.get('date')) < today_end and 
-               float(order.get('balance', 0)) > 0
-        )
-        
-        # Calculate time until midnight reset
-        midnight = today_end
-        time_until_reset = (midnight - now).total_seconds()
-        hours_until_reset = int(time_until_reset // 3600)
-        minutes_until_reset = int((time_until_reset % 3600) // 60)
-        
-        # Return comprehensive stats
-        return jsonify({
-            "status": "success",
-            "timestamp": now.isoformat(),
-            "session_info": {
-                "session_started": session.get('login_time'),  # Add this
-            },
-            "stats": {
-                "total_sales_today": stats['total_sales_today'],
-                "retail_sales_today": stats['retail_sales_today'],
-                "wholesale_sales_today": stats['wholesale_sales_today'],
-                "total_debt": stats['total_debt'],
-                "total_expenses": stats.get('total_expenses', 0),
-                "open_orders_count": stats['open_orders_count'],
-                "closed_orders_count": stats['closed_orders_count'],
-                "retail_open_orders": stats['retail_open_orders'],
-                "retail_closed_orders": stats['retail_closed_orders'],
-                "wholesale_open_orders": stats['wholesale_open_orders'],
-                "wholesale_closed_orders": stats['wholesale_closed_orders'],
-                "todays_debt": todays_debt
-            },
-            "reset_info": {
-                "next_reset": midnight.isoformat(),
-                "hours_until_reset": hours_until_reset,
-                "minutes_until_reset": minutes_until_reset
-            }
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"API stats error: {str(e)}")
-        return jsonify({"error": "Failed to fetch stats"}), 500
-
-@app.route('/api/activities', methods=['GET'])
-#@login_required
-def get_activities():
-    """
-    Main API endpoint for activity handler
-    Query params:
-    - filter: all|pending|completed|expenses|gateway|modified|previous
-    - date: YYYY-MM-DD (optional)
-    - page: int (default 1)
-    - per_page: int (default 50)
-    """
-    # Parse params
-    filter_type = request.args.get('filter', 'all')
-    selected_date = request.args.get('date', None)
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 50))
-    
-    # Get MongoDB collections
-    db = get_db()
-    orders_collection = db['orders']
-    expenses_collection = db['expenses']
-    
-    # Determine mode
-    mode = 'sorted' if selected_date else 'raw'
-    
-    # Parse date range if provided
-    date_start = None
-    date_end = None
-    if selected_date:
-        date_obj = datetime.strptime(selected_date, '%Y-%m-%d')
-        date_start = NAIROBI_TZ.localize(date_obj.replace(hour=0, minute=0, second=0))
-        date_end = NAIROBI_TZ.localize(date_obj.replace(hour=23, minute=59, second=59))
-    
-    # Fetch and process activities based on filter and mode
-    if mode == 'raw':
-        activities = fetch_raw_activities(
-            orders_collection, 
-            expenses_collection, 
-            filter_type, 
-            page, 
-            per_page
-        )
-        counts = calculate_filter_counts(orders_collection, expenses_collection)
-        
-        return jsonify({
-            'mode': 'raw',
-            'activities': activities['data'],
-            'pagination': activities['pagination'],
-            'counts': counts
-        })
-    
-    else:  # sorted mode
-        activities = fetch_sorted_activities(
-            orders_collection,
-            expenses_collection,
-            filter_type,
-            date_start,
-            date_end,
-            page,
-            per_page
-        )
-        stats = calculate_stats(activities['data'], filter_type)
-        counts = calculate_filter_counts(orders_collection, expenses_collection)
-        
-        return jsonify({
-            'mode': 'sorted',
-            'activities': activities['data'],
-            'stats': stats,
-            'pagination': activities['pagination'],
-            'counts': counts
-        })
-
-@app.route('/export/sales/<format>')
-def export_sales_data(format):
-    time_filter = request.args.get('time') or 'all'
-    status_filter = request.args.get('status') or 'all'
-    search = request.args.get('search') or ''
-    
-    query = {}
-    expense_query = {} # Expenses usually don't have a 'status'
-
-    # Time Filtering
-    if time_filter != 'all':
-        now = datetime.now(NAIROBI_TZ)
-        if time_filter == 'day':
-            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif time_filter == 'week':
-            start = now - timedelta(days=now.weekday())
-            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif time_filter == 'month':
-            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        query['date'] = {'$gte': start}
-        expense_query['date'] = {'$gte': start}
-
-    # Order Status Filter
-    if status_filter == 'pending':
-        query['balance'] = {'$gt': 0}
-    elif status_filter == 'completed':
-        query['balance'] = {'$lte': 0}
-
-    # Search logic
-    if search:
-        query['$or'] = [
-            {'receipt_id': {'$regex': search, '$options': 'i'}},
-            {'salesperson_name': {'$regex': search, '$options': 'i'}}
-        ]
-        expense_query['description'] = {'$regex': search, '$options': 'i'}
-
-    orders = list(db["orders"].find(query).sort('date', -1))
-    expenses = list(db["expenses"].find(expense_query).sort('date', -1))
-    
-    if format == 'pdf':
-        return generate_pdf_export(orders, expenses, time_filter, status_filter)
-    # Note: docx would need similar logic updates
-    return jsonify({'error': 'PDF recommended for this layout'}), 400
 
 def parse_items(items_list):
     """Parse items list into clean product string"""
@@ -2472,7 +1648,662 @@ def generate_docx_export(orders, time_filter, status_filter):
         headers={'Content-Disposition': f'attachment; filename=sales_{datetime.now(NAIROBI_TZ).strftime("%Y%m%d_%H%M%S")}.docx'}
     )
 
-#2 sell
+# ============================================================================
+# ROUTES
+# ============================================================================
+
+@app.before_request
+def detect_abnormal_session_end():
+    if request.endpoint in ['static', 'auth', 'splash']:
+        return
+
+    current_user = get_current_user()
+    if not current_user:
+        return
+
+    user_email = current_user.get('email')
+    if not user_email:
+        return
+
+    current_login_time_str = session.get('login_time')
+    if not current_login_time_str:
+        return
+
+    current_login_time = datetime.fromisoformat(current_login_time_str)
+    if current_login_time.tzinfo is None:
+        current_login_time = NAIROBI_TZ.localize(current_login_time)
+
+    last_login_log = db['session_logs'].find_one(
+        {"email": user_email, "action": "login_success"},
+        sort=[("timestamp", -1)]
+    )
+    if not last_login_log:
+        return
+
+    last_db_login_time = last_login_log.get('timestamp')
+    if not last_db_login_time:
+        return
+
+    if last_db_login_time.tzinfo is None:
+        last_db_login_time = NAIROBI_TZ.localize(last_db_login_time)
+
+    if abs((last_db_login_time - current_login_time).total_seconds()) < 2:
+        return
+
+    existing_logout = db['session_logs'].find_one({
+        "email": user_email,
+        "action": "logout",
+        "timestamp": {"$gt": last_db_login_time}
+    })
+    if existing_logout:
+        return
+
+    db['session_logs'].insert_one({
+        'email':       user_email,
+        'action':      'logout',
+        'logout_type': 'abnormal',
+        'reason':      'session_expired_or_browser_closed',
+        'last_login':  last_db_login_time,
+        'timestamp':   datetime.now(NAIROBI_TZ),
+        'ip_address':  request.remote_addr,
+        'user_agent':  request.headers.get('User-Agent')
+    })
+
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Check application and database health"""
+    try:
+        db_manager.client.admin.command('ping')
+        return jsonify({
+            'status': 'healthy',
+            'database': {
+                'connected': True,
+                'host': Config.MY_HOST,
+                'peer_online': db_manager.peer_online,
+                'mode': 'STANDALONE'
+            },
+            'timestamp': datetime.now(NAIROBI_TZ).isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 503
+    
+@app.route('/')
+def splash():
+    if 'user' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('splash.html')
+
+
+def login_required(f):
+    """Enhanced login_required decorator"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('auth', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ============================================================================
+# AUTHENTICATION ROUTE (Enhanced)
+# ============================================================================
+
+@app.route('/auth', methods=['GET', 'POST'])
+def auth():
+    """
+    Unified authentication endpoint for login and signup
+    - Handles form validation
+    - Tracks login attempts
+    - **NEW: Tracks last_login timestamps**
+    """
+    if 'user' in session:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        form_type = request.form.get('form_type')
+        
+        # ========================================
+        # SIGNUP FLOW
+        # ========================================
+        if form_type == 'signup':
+            email = request.form.get('email')
+            first_name = request.form.get('first_name')
+            last_name = request.form.get('last_name')
+            phone = request.form.get('phone')
+            password = request.form.get('password')
+            confirm_password = request.form.get('confirmPassword')
+            role = request.form.get('role', 'user')
+
+            print(f"DEBUG first_name: {repr(first_name)}")
+            print(f"DEBUG last_name: {repr(last_name)}")
+
+            # Server-side validation
+            if not first_name or not last_name:
+                return jsonify({"status": "error", "error": "Name fields are required"}), 400
+            
+            if not re.match(r"^[A-Za-z]+$", first_name) or not re.match(r"^[A-Za-z]+$", last_name):
+                return jsonify({"status": "error", "error": "Names must contain only letters"}), 400
+            
+            if password != confirm_password:
+                return jsonify({"status": "error", "error": "Passwords don't match."}), 400
+            
+            if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                return jsonify({"status": "error", "error": "Invalid email format."}), 400
+            
+            if not re.match(r"[0-9]{10,15}", phone):
+                return jsonify({"status": "error", "error": "Phone number should be 10-15 digits."}), 400
+            
+            if not re.match(r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}", password):
+                return jsonify({"status": "error", "error": "Password must be at least 8 characters, including a number, an uppercase letter, and a lowercase letter."}), 400
+            
+            try:
+                # Check if email exists
+                if users_collection.find_one({"email": email}):
+                    return jsonify({"status": "error", "error": "Email already exists. Try logging in."}), 400
+                
+                # Hash password and create user
+                hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+                users_collection.insert_one({
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "phone": phone,
+                    "password": hashed_password,
+                    "role": role,
+                    "status": "pending",
+                    "created_at": datetime.now(NAIROBI_TZ),
+                    "last_login": None,  # 🆕 NEW: Initialize last_login
+                    "login_history": []  # 🆕 NEW: Track login history
+                })
+                
+                # Log signup
+                db['session_logs'].insert_one({
+                    'email': email,
+                    'action': 'signup',
+                    'timestamp': datetime.now(NAIROBI_TZ),
+                    'ip_address': request.remote_addr,
+                    'user_agent': request.headers.get('User-Agent')
+                })
+                
+                return jsonify({
+                    "status": "success",
+                    "message": "Signup successful! Please log in."
+                }), 200
+                
+            except Exception as e:
+                return jsonify({"status": "error", "error": f"Signup failed: {str(e)}"}), 500
+        
+        # ========================================
+        # LOGIN FLOW (🆕 ENHANCED)
+        # ========================================
+        elif form_type == 'login':
+            email = request.form.get('email')
+            password = request.form.get('password')
+            
+            try:
+                user = users_collection.find_one({"email": email})
+                
+                # Check if user exists
+                if not user:
+                    # Log failed attempt
+                    db['session_logs'].insert_one({
+                        'email': email,
+                        'action': 'login_failed',
+                        'reason': 'user_not_found',
+                        'timestamp': datetime.now(NAIROBI_TZ),
+                        'ip_address': request.remote_addr,
+                        'user_agent': request.headers.get('User-Agent')
+                    })
+                    return jsonify({"status": "error", "error": "No account with that email."}), 401
+                
+                # Check password
+                if not check_password_hash(user["password"], password):
+                    # Log failed attempt
+                    db['session_logs'].insert_one({
+                        'email': email,
+                        'action': 'login_failed',
+                        'reason': 'wrong_password',
+                        'timestamp': datetime.now(NAIROBI_TZ),
+                        'ip_address': request.remote_addr,
+                        'user_agent': request.headers.get('User-Agent')
+                    })
+                    return jsonify({"status": "error", "error": "Wrong password. Try again."}), 401
+                # Check if blocked
+                if user.get('status') == 'blocked':
+                    db['session_logs'].insert_one({
+                        'email': email,
+                        'action': 'login_failed',
+                        'reason': 'account_blocked',
+                        'timestamp': datetime.now(NAIROBI_TZ),
+                        'ip_address': request.remote_addr,
+                        'user_agent': request.headers.get('User-Agent')
+                    })
+                    return jsonify({"status": "error", "error": "Your account has been suspended. Contact support."}), 403
+
+                # Check if pending approval
+                if user.get('status') == 'pending':
+                    return jsonify({"status": "pending", "redirect": f"/awaiting?email={email}"}), 200
+                
+                # 🆕 NEW: Capture previous last_login before updating
+                previous_last_login = user.get('last_login')
+                current_login_time = datetime.now(NAIROBI_TZ)
+                
+                # 🆕 NEW: Update user's last_login in database
+                users_collection.update_one(
+                    {"_id": user["_id"]},
+                    {
+                        "$set": {"last_login": current_login_time},
+                        "$push": {
+                            "login_history": {
+                                "timestamp": current_login_time,
+                                "ip_address": request.remote_addr,
+                                "user_agent": request.headers.get('User-Agent')
+                            }
+                        }
+                    }
+                )
+                
+                # Initialize session
+                session['user'] = {
+                    "first_name": user.get("first_name"),
+                    "last_name": user.get("last_name"),
+                    "email": user.get("email"),
+                    "role": user.get("role", "user"),
+                    "user_id": str(user["_id"])
+                }
+                session['last_activity'] = current_login_time.isoformat()
+                session['login_time'] = current_login_time.isoformat()
+                session['previous_last_login'] = previous_last_login.isoformat() if previous_last_login else None  # 🆕 NEW
+                session.permanent = True
+                
+                # Log successful login
+                db['session_logs'].insert_one({
+                    'email': email,
+                    'action': 'login_success',
+                    'timestamp': current_login_time,
+                    'ip_address': request.remote_addr,
+                    'user_agent': request.headers.get('User-Agent'),
+                    'previous_login': previous_last_login  # 🆕 NEW: Track previous login
+                })
+                
+                # Redirect to intended page or dashboard
+                next_page = request.args.get('next', url_for('dashboard'))
+                return jsonify({
+                    "status": "success",
+                    "message": "Login successful!",
+                    "redirect": next_page
+                }), 200
+                
+            except Exception as e:
+                return jsonify({"status": "error", "error": f"Login failed: {str(e)}"}), 500
+    
+    return render_template('auth.html', signup_success=request.args.get('signup_success', False))
+
+
+
+# ============================================================================
+# ADMIN: View Session Logs
+# ============================================================================
+@app.route('/admin')
+def admin_panel():
+    if 'user' not in session:
+        return redirect(url_for('auth'))
+    if session['user'].get('role') not in ['admin', 'manager']:
+        return redirect(url_for('dashboard'))
+    return render_template('admin.html')
+
+def get_current_user():
+    """
+    Safely retrieve current user from session with fallback logic.
+    Handles both session structures and prevents KeyError.
+    
+    Returns:
+        dict: User data with email, first_name, last_name, role
+        None: If no valid session exists
+    """
+    # Try nested structure first (from login route)
+    user = session.get('user')
+    if user and isinstance(user, dict):
+        return user
+    
+    # Fallback: Try direct email key (legacy/old sessions)
+    email = session.get('email')
+    if email:
+        return {'email': email}
+    
+    # No valid session
+    return None
+
+@app.route('/awaiting')
+def awaiting():
+    email = request.args.get('email', '')
+    return render_template('awaiting.html', email=email)
+
+@app.route('/api/auth/status')
+def auth_status():
+    email = request.args.get('email', '')
+    if not email:
+        return jsonify({"status": "error"}), 400
+    user = users_collection.find_one({"email": email}, {"status": 1})
+    if not user:
+        return jsonify({"status": "error"}), 404
+    return jsonify({"status": user.get("status", "pending")}), 200
+
+@app.route('/forgot-password', methods=['GET'])
+def forgot_password():
+    return render_template('forgot_password.html')
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def forgot_password_request():
+    data  = request.get_json()
+    email = data.get('email', '').strip()
+
+    user = users_collection.find_one({"email": email})
+    if not user:
+        return jsonify({"status": "not_found"}), 200
+
+    return jsonify({"status": "found"}), 200
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def self_reset_password():
+    data             = request.get_json()
+    email            = data.get('email', '').strip()
+    new_password     = data.get('new_password', '')
+    confirm_password = data.get('confirm_password', '')
+
+    if new_password != confirm_password:
+        return jsonify({"status": "error", "error": "Passwords do not match"}), 400
+
+    if not re.match(r"(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}", new_password):
+        return jsonify({"status": "error", "error": "Password must be 8+ chars with uppercase, lowercase and number"}), 400
+
+    user = users_collection.find_one({"email": email})
+    if not user:
+        return jsonify({"status": "error", "error": "Account not found"}), 404
+
+    hashed = generate_password_hash(new_password, method='pbkdf2:sha256')
+    users_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password": hashed, "last_password_reset": datetime.now(NAIROBI_TZ)}}
+    )
+
+    db['session_logs'].insert_one({
+        'email':      email,
+        'action':     'password_reset_request',
+        'reason':     'user_self_reset',
+        'timestamp':  datetime.now(NAIROBI_TZ),
+        'ip_address': request.remote_addr,
+        'user_agent': request.headers.get('User-Agent')
+    })
+
+    return jsonify({"status": "success", "message": "Password updated. Please log in."}), 200
+
+@app.route('/dashboard', methods=['GET'])
+def dashboard():
+   
+    # 🆕 Use helper function for consistent session access
+    current_user = get_current_user()
+    
+    if not current_user:
+        flash('Please log in to continue.', 'warning')
+        return redirect(url_for('auth'))
+    
+    user_email = current_user.get('email')
+    
+    # Fetch full user data from database
+    user_data = db.users.find_one({"email": user_email})
+    
+    if not user_data:
+        session.clear()
+        flash('User account not found. Please log in again.', 'error')
+        return redirect(url_for('auth'))
+    
+    # 🆕 Get last login (skip current session, get previous one)
+    last_log = db.session_logs.find({
+        "email": user_email, 
+        "action": "login_success"
+    }).sort("timestamp", -1).skip(1).limit(1)
+    
+    last_log_list = list(last_log)
+    last_login_timestamp = last_log_list[0]['timestamp'] if last_log_list else None
+    
+    search_query = request.args.get('search', '').strip()
+    
+    # Set today's date range
+    now = datetime.now(NAIROBI_TZ)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    
+    # Fetch orders and retail collection
+    all_orders = list(orders_collection.find().sort('date', -1))
+    retail_collection = list(db["retail"].find({"date": now.strftime('%Y-%m-%d')}))
+    
+    # Calculate dashboard stats
+    stats = calculate_dashboard_stats(all_orders, retail_collection, today_start, today_end)
+    
+    # Calculate additional metrics
+    total_orders = len(all_orders)
+    pending_count = sum(1 for order in all_orders if float(order.get('balance', 0)) > 0)
+    completed_count = sum(1 for order in all_orders if float(order.get('balance', 0)) <= 0.001)
+    
+    # Today's debt (orders created today with balance)
+    todays_debt = sum(
+        float(order.get('balance', 0)) 
+        for order in all_orders 
+        if process_date(order.get('date')) >= today_start and 
+           process_date(order.get('date')) < today_end and 
+           float(order.get('balance', 0)) > 0
+    )
+    
+    return render_template(
+        'dashboard.html',
+        user=user_data,
+        now=now,
+        last_login_timestamp=last_login_timestamp,
+        total_sales_today=stats['total_sales_today'],
+        retail_sales_today=stats['retail_sales_today'],
+        wholesale_sales_today=stats['wholesale_sales_today'],
+        total_debt=stats['total_debt'],  # 🆕 Changed from total_debts for consistency
+        total_expenses=stats.get('total_expenses', 0),  # 🆕 Added
+        open_orders_count=stats['open_orders_count'],
+        closed_orders_count=stats['closed_orders_count'],
+        retail_open_orders=stats['retail_open_orders'],
+        retail_closed_orders=stats['retail_closed_orders'],
+        wholesale_open_orders=stats['wholesale_open_orders'],
+        wholesale_closed_orders=stats['wholesale_closed_orders'],
+        todays_debt=todays_debt,
+        search=search_query,
+    )
+
+
+@app.route('/api/dashboard/stats', methods=['GET'])
+def get_dashboard_stats():
+ 
+    try:
+        current_user = get_current_user()
+        
+        if not current_user:
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        # Get today's date range
+        now = datetime.now(NAIROBI_TZ)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        
+        # Fetch orders and retail collection
+        all_orders = list(orders_collection.find().sort('date', -1))
+        retail_collection = list(db["retail"].find({"date": now.strftime('%Y-%m-%d')}))
+        
+        # Calculate stats
+        stats = calculate_dashboard_stats(all_orders, retail_collection, today_start, today_end)
+        
+        # Calculate today's debt
+        todays_debt = sum(
+            float(order.get('balance', 0)) 
+            for order in all_orders 
+            if process_date(order.get('date')) >= today_start and 
+               process_date(order.get('date')) < today_end and 
+               float(order.get('balance', 0)) > 0
+        )
+        
+        # Calculate time until midnight reset
+        midnight = today_end
+        time_until_reset = (midnight - now).total_seconds()
+        hours_until_reset = int(time_until_reset // 3600)
+        minutes_until_reset = int((time_until_reset % 3600) // 60)
+        
+        # Return comprehensive stats
+        return jsonify({
+            "status": "success",
+            "timestamp": now.isoformat(),
+            "session_info": {
+                "session_started": session.get('login_time'),  # Add this
+            },
+            "stats": {
+                "total_sales_today": stats['total_sales_today'],
+                "retail_sales_today": stats['retail_sales_today'],
+                "wholesale_sales_today": stats['wholesale_sales_today'],
+                "total_debt": stats['total_debt'],
+                "total_expenses": stats.get('total_expenses', 0),
+                "open_orders_count": stats['open_orders_count'],
+                "closed_orders_count": stats['closed_orders_count'],
+                "retail_open_orders": stats['retail_open_orders'],
+                "retail_closed_orders": stats['retail_closed_orders'],
+                "wholesale_open_orders": stats['wholesale_open_orders'],
+                "wholesale_closed_orders": stats['wholesale_closed_orders'],
+                "todays_debt": todays_debt
+            },
+            "reset_info": {
+                "next_reset": midnight.isoformat(),
+                "hours_until_reset": hours_until_reset,
+                "minutes_until_reset": minutes_until_reset
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"API stats error: {str(e)}")
+        return jsonify({"error": "Failed to fetch stats"}), 500
+
+@app.route('/api/activities', methods=['GET'])
+@login_required
+def get_activities():
+    """
+    Main API endpoint for activity handler
+    Query params:
+    - filter: all|pending|completed|expenses|gateway|modified|previous
+    - date: YYYY-MM-DD (optional)
+    - page: int (default 1)
+    - per_page: int (default 50)
+    """
+    # Parse params
+    filter_type = request.args.get('filter', 'all')
+    selected_date = request.args.get('date', None)
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
+    
+    # Get MongoDB collections
+    db = get_db()
+    orders_collection = db['orders']
+    expenses_collection = db['expenses']
+    
+    # Determine mode
+    mode = 'sorted' if selected_date else 'raw'
+    
+    # Parse date range if provided
+    date_start = None
+    date_end = None
+    if selected_date:
+        date_obj = datetime.strptime(selected_date, '%Y-%m-%d')
+        date_start = NAIROBI_TZ.localize(date_obj.replace(hour=0, minute=0, second=0))
+        date_end = NAIROBI_TZ.localize(date_obj.replace(hour=23, minute=59, second=59))
+    
+    # Fetch and process activities based on filter and mode
+    if mode == 'raw':
+        activities = fetch_raw_activities(
+            orders_collection, 
+            expenses_collection, 
+            filter_type, 
+            page, 
+            per_page
+        )
+        counts = calculate_filter_counts(orders_collection, expenses_collection)
+        
+        return jsonify({
+            'mode': 'raw',
+            'activities': activities['data'],
+            'pagination': activities['pagination'],
+            'counts': counts
+        })
+    
+    else:  # sorted mode
+        activities = fetch_sorted_activities(
+            orders_collection,
+            expenses_collection,
+            filter_type,
+            date_start,
+            date_end,
+            page,
+            per_page
+        )
+        stats = calculate_stats(activities['data'], filter_type)
+        counts = calculate_filter_counts(orders_collection, expenses_collection)
+        
+        return jsonify({
+            'mode': 'sorted',
+            'activities': activities['data'],
+            'stats': stats,
+            'pagination': activities['pagination'],
+            'counts': counts
+        })
+
+@app.route('/export/sales/<format>')
+def export_sales_data(format):
+    time_filter = request.args.get('time') or 'all'
+    status_filter = request.args.get('status') or 'all'
+    search = request.args.get('search') or ''
+    
+    query = {}
+    expense_query = {} # Expenses usually don't have a 'status'
+
+    # Time Filtering
+    if time_filter != 'all':
+        now = datetime.now(NAIROBI_TZ)
+        if time_filter == 'day':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'week':
+            start = now - timedelta(days=now.weekday())
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'month':
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        query['date'] = {'$gte': start}
+        expense_query['date'] = {'$gte': start}
+
+    # Order Status Filter
+    if status_filter == 'pending':
+        query['balance'] = {'$gt': 0}
+    elif status_filter == 'completed':
+        query['balance'] = {'$lte': 0}
+
+    # Search logic
+    if search:
+        query['$or'] = [
+            {'receipt_id': {'$regex': search, '$options': 'i'}},
+            {'salesperson_name': {'$regex': search, '$options': 'i'}}
+        ]
+        expense_query['description'] = {'$regex': search, '$options': 'i'}
+
+    orders = list(db["orders"].find(query).sort('date', -1))
+    expenses = list(db["expenses"].find(expense_query).sort('date', -1))
+    
+    if format == 'pdf':
+        return generate_pdf_export(orders, expenses, time_filter, status_filter)
+    # Note: docx would need similar logic updates
+    return jsonify({'error': 'PDF recommended for this layout'}), 400
+
+
+# ORDERS MNGMNT
+
 @app.route('/orders', methods=['GET', 'POST'])
 def orders():
     logger.info("Processing /orders route")
@@ -2773,7 +2604,8 @@ def orders_data():
 
     return jsonify(orders_list), 200
 
-## make payment 
+## partial payments
+
 @app.route('/mark_paid/<receipt_id>', methods=['POST'])
 def mark_paid(receipt_id):
     try:
@@ -3255,17 +3087,7 @@ def edit_order(receipt_id):
         }
     }), 200
 
-@app.route('/api/orders/<receipt_id>', methods=['GET'])
-def get_order(receipt_id):
-    order = orders_collection.find_one({"receipt_id": receipt_id})
-    
-    if not order:
-        return jsonify({"error": "Order not found"}), 404
-    
-    # Convert ObjectId to string
-    order['_id'] = str(order['_id'])
-    
-    return jsonify(order), 200
+# STOCK MNGMNT
 
 @app.route('/stock', methods=['GET', 'POST'])
 def stock():
@@ -3617,6 +3439,132 @@ def receipts():
         logger.error(f"Error loading receipts: {str(e)}")
         return render_template('error.html', message=f"Error loading receipts: {str(e)}"), 500
 
+
+
+@app.route('/clear_stock_cache', methods=['POST'])
+def clear_stock_cache():
+    """Clear stock cache with detailed logging."""
+    print(f"[CLEAR_STOCK_CACHE] Request received: user={session['user']['email']}")
+    try:
+        print("[CLEAR_STOCK_CACHE] Calling update_stock_version")
+        new_version, client_log_messages = update_stock_version()
+        print("[CLEAR_STOCK_CACHE] Clearing stock_cache")
+        stock_cache['data'] = None
+        stock_cache['version'] = None
+        stock_cache['timestamp'] = None
+        print("[CLEAR_STOCK_CACHE] Stock cache cleared successfully")
+        return jsonify({'status': 'success', 'message': 'Cache cleared', 'logs': client_log_messages}), 200
+    except Exception as e:
+        print(f"[CLEAR_STOCK_CACHE] Error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': f'Failed to clear cache: {str(e)}', 'logs': client_log_messages}, session={'user': mock_user}), 500
+
+@app.route('/stock_data', methods=['GET'])
+def stock_data():
+    """Fetch stock data or version from MongoDB for retail/wholesale modals."""
+    try:
+        version_doc = metadata_collection.find_one({'_id': 'stock_version'})
+        current_version = str(version_doc.get('version', 0)) if version_doc else '0'
+
+        if request.args.get('version_only') == 'true':
+            return jsonify({'version': current_version}), 200
+
+        if (stock_cache['data'] is not None and
+                stock_cache['version'] == current_version and
+                stock_cache['timestamp'] is not None and
+                datetime.now() < stock_cache['timestamp'] + stock_cache['timeout']):
+            print(f"Serving {len(stock_cache['data'])} stock items from cache (version: {current_version})")
+            return jsonify({'version': current_version, 'data': stock_cache['data']}), 200
+
+        stock_items = [
+            {
+                'stock_name': doc['stock_name'],
+                'selling_price': float(doc.get('selling_price', 0)),
+                'wholesale': float(doc.get('wholesale', 0)),
+                'stock_quantity': float(doc.get('stock_quantity', 0)),
+                'uom': doc.get('uom', 'Unit'),
+                'category': doc.get('category', ''),
+                'id': str(doc['_id']),
+                'company_price': float(doc.get('company_price', 0)),
+                'expire_date': doc.get('expire_date', None),
+                'reorder_quantity': int(doc.get('reorder_quantity', 0))
+            }
+            for doc in stock_collection.find().sort('stock_name', 1)
+        ]
+
+        seen = set()
+        unique_stock_items = []
+        for item in stock_items:
+            stock_name = item['stock_name']
+            if stock_name not in seen and all(
+                item[key] is not None for key in ['selling_price', 'wholesale', 'stock_quantity']
+            ):
+                seen.add(stock_name)
+                unique_stock_items.append(item)
+
+        if not unique_stock_items:
+            print("No stock items found in MongoDB")
+            return jsonify({'version': current_version, 'data': []}), 200
+
+        stock_cache['data'] = unique_stock_items
+        stock_cache['version'] = current_version
+        stock_cache['timestamp'] = datetime.now()
+
+        print(f"Returning {len(unique_stock_items)} stock items from MongoDB (version: {current_version})")
+        return jsonify({'version': current_version, 'data': unique_stock_items}), 200
+    except Exception as e:
+        print(f"Error fetching stock data: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+    
+
+#        RECEIPTS
+
+@app.route('/receipts')
+def receipts():
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = 30
+        search = request.args.get('search', '').lower()
+        period = request.args.get('period', 'all')
+        
+        # Build query
+        query = {}
+        if search:
+            query["$or"] = [
+                {"receipt_id": {"$regex": search, "$options": "i"}},
+                {"shop_name": {"$regex": search, "$options": "i"}},
+                {"salesperson_name": {"$regex": search, "$options": "i"}}
+            ]
+        
+        if period != 'all':
+            now = datetime.now(NAIROBI_TZ)
+            if period == 'day':
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            elif period == 'week':
+                start = now - timedelta(days=now.weekday())
+                start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            elif period == 'month':
+                start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            query["date"] = {"$gte": start}
+        
+        # Get ALL matching orders first (for total count)
+        all_orders = list(orders_collection.find(query).sort('date', -1))
+        total_orders = len(all_orders)
+        
+        # Serialize ALL
+        all_orders = [serialize_mongo_doc(order) for order in all_orders]
+        
+        # Pagination
+        start_idx = (page - 1) * per_page
+        paginated_orders = all_orders[start_idx:start_idx + per_page]
+        
+        return render_template('receipts.html', 
+                             orders=paginated_orders, 
+                             total_orders=total_orders,
+                             user=session['user'])
+    except Exception as e:
+        logger.error(f"Error loading receipts: {str(e)}")
+        return render_template('error.html', message=f"Error loading receipts: {str(e)}"), 500
+
 @app.route('/receipt/<order_id>')
 def receipt(order_id):
     try:
@@ -3717,133 +3665,20 @@ def receipt(order_id):
         logger.error(f"Error in receipt route for {order_id}: {str(e)}")
         return render_template('error.html', message=f"Internal Server Error: {str(e)}"), 500
 
-@app.route('/clear_stock_cache', methods=['POST'])
-def clear_stock_cache():
-    """Clear stock cache with detailed logging."""
-    print(f"[CLEAR_STOCK_CACHE] Request received: user={session['user']['email']}")
-    try:
-        print("[CLEAR_STOCK_CACHE] Calling update_stock_version")
-        new_version, client_log_messages = update_stock_version()
-        print("[CLEAR_STOCK_CACHE] Clearing stock_cache")
-        stock_cache['data'] = None
-        stock_cache['version'] = None
-        stock_cache['timestamp'] = None
-        print("[CLEAR_STOCK_CACHE] Stock cache cleared successfully")
-        return jsonify({'status': 'success', 'message': 'Cache cleared', 'logs': client_log_messages}), 200
-    except Exception as e:
-        print(f"[CLEAR_STOCK_CACHE] Error: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'error': f'Failed to clear cache: {str(e)}', 'logs': client_log_messages}, session={'user': mock_user}), 500
-
-@app.route('/stock_data', methods=['GET'])
-def stock_data():
-    """Fetch stock data or version from MongoDB for retail/wholesale modals."""
-    try:
-        version_doc = metadata_collection.find_one({'_id': 'stock_version'})
-        current_version = str(version_doc.get('version', 0)) if version_doc else '0'
-
-        if request.args.get('version_only') == 'true':
-            return jsonify({'version': current_version}), 200
-
-        if (stock_cache['data'] is not None and
-                stock_cache['version'] == current_version and
-                stock_cache['timestamp'] is not None and
-                datetime.now() < stock_cache['timestamp'] + stock_cache['timeout']):
-            print(f"Serving {len(stock_cache['data'])} stock items from cache (version: {current_version})")
-            return jsonify({'version': current_version, 'data': stock_cache['data']}), 200
-
-        stock_items = [
-            {
-                'stock_name': doc['stock_name'],
-                'selling_price': float(doc.get('selling_price', 0)),
-                'wholesale': float(doc.get('wholesale', 0)),
-                'stock_quantity': float(doc.get('stock_quantity', 0)),
-                'uom': doc.get('uom', 'Unit'),
-                'category': doc.get('category', ''),
-                'id': str(doc['_id']),
-                'company_price': float(doc.get('company_price', 0)),
-                'expire_date': doc.get('expire_date', None),
-                'reorder_quantity': int(doc.get('reorder_quantity', 0))
-            }
-            for doc in stock_collection.find().sort('stock_name', 1)
-        ]
-
-        seen = set()
-        unique_stock_items = []
-        for item in stock_items:
-            stock_name = item['stock_name']
-            if stock_name not in seen and all(
-                item[key] is not None for key in ['selling_price', 'wholesale', 'stock_quantity']
-            ):
-                seen.add(stock_name)
-                unique_stock_items.append(item)
-
-        if not unique_stock_items:
-            print("No stock items found in MongoDB")
-            return jsonify({'version': current_version, 'data': []}), 200
-
-        stock_cache['data'] = unique_stock_items
-        stock_cache['version'] = current_version
-        stock_cache['timestamp'] = datetime.now()
-
-        print(f"Returning {len(unique_stock_items)} stock items from MongoDB (version: {current_version})")
-        return jsonify({'version': current_version, 'data': unique_stock_items}), 200
-    except Exception as e:
-        print(f"Error fetching stock data: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
+@app.route('/api/orders/<receipt_id>', methods=['GET'])
+def get_order(receipt_id):
+    order = orders_collection.find_one({"receipt_id": receipt_id})
     
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    
+    # Convert ObjectId to string
+    order['_id'] = str(order['_id'])
+    
+    return jsonify(order), 200
+        
+#         CLIENTS
 
-#                                            receipts
-
-@app.route('/receipts')
-def receipts():
-    try:
-        page = request.args.get('page', 1, type=int)
-        per_page = 30
-        search = request.args.get('search', '').lower()
-        period = request.args.get('period', 'all')
-        
-        # Build query
-        query = {}
-        if search:
-            query["$or"] = [
-                {"receipt_id": {"$regex": search, "$options": "i"}},
-                {"shop_name": {"$regex": search, "$options": "i"}},
-                {"salesperson_name": {"$regex": search, "$options": "i"}}
-            ]
-        
-        if period != 'all':
-            now = datetime.now(NAIROBI_TZ)
-            if period == 'day':
-                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            elif period == 'week':
-                start = now - timedelta(days=now.weekday())
-                start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-            elif period == 'month':
-                start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            query["date"] = {"$gte": start}
-        
-        # Get ALL matching orders first (for total count)
-        all_orders = list(orders_collection.find(query).sort('date', -1))
-        total_orders = len(all_orders)
-        
-        # Serialize ALL
-        all_orders = [serialize_mongo_doc(order) for order in all_orders]
-        
-        # Pagination
-        start_idx = (page - 1) * per_page
-        paginated_orders = all_orders[start_idx:start_idx + per_page]
-        
-        return render_template('receipts.html', 
-                             orders=paginated_orders, 
-                             total_orders=total_orders,
-                             user=session['user'])
-    except Exception as e:
-        logger.error(f"Error loading receipts: {str(e)}")
-        return render_template('error.html', message=f"Error loading receipts: {str(e)}"), 500
-
-
-        
-#          clients
 @app.route('/clients', methods=['GET'])
 def clients():
     """Render the clients page with paginated data."""
@@ -4012,7 +3847,8 @@ def edit_client(shop_name):
         return jsonify({'error': 'Internal server error'}), 500
 
 
-######################## loading payload
+# LOADING SHEETS
+
 @app.route('/load_to_loading_sheet/<receipt_id>/<action>')
 def load_to_loading_sheet(receipt_id, action):
     # Find order in MongoDB
@@ -4186,7 +4022,7 @@ def view_loading_sheet():
         print(f"Error in view-loading-sheet: {str(e)}")
         flash(f'Error loading sheet: {str(e)}', 'error')
         return redirect(url_for('loading_sheets'))
-#download the payload
+
 @app.route('/download-loading-sheet')
 def download_loading_sheet():
     sheet_id = request.args.get('sheet_id')
@@ -4380,7 +4216,8 @@ def get_loading_sheet(sheet_id):
         return jsonify({"error": str(e)}), 500
 
 
-# Configuration for uploads
+# EXPENSES
+
 UPLOAD_FOLDER = 'static/uploads/receipts'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -4450,6 +4287,261 @@ def expenses():
         print(f"DEBUG ERROR: {str(e)}") # Visible in your terminal
         return jsonify({'error': f"Internal Server Error: {str(e)}"}), 500
 
+
+
+# ============================================================================
+# COMPARISON API - Compare Previous vs Current Period Performance
+# ============================================================================
+
+@app.route('/api/comparison')
+@login_required
+def get_comparison_data():
+    """
+    Compare previous period vs current period NET sales
+    NET = Total Sales - Expenses (Debt is tracked separately, not subtracted from NET)
+    
+    Modes:
+    - day: Yesterday vs Today
+    - week: Last Week vs This Week
+    - month: Last Month vs This Month
+    
+    Returns JSON with previous/current stats and growth metrics
+    """
+    mode = request.args.get('mode', 'day')
+    now = datetime.now(NAIROBI_TZ)
+    
+    print(f"📊 Comparison API called: mode={mode}")
+    
+    # ============================================================================
+    # STEP 1: CALCULATE DATE RANGES BASED ON MODE
+    # ============================================================================
+    
+    if mode == 'day':
+        # Current Period: Today (00:00:00 to 23:59:59)
+        current_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        current_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        # Previous Period: Yesterday (00:00:00 to 23:59:59)
+        previous_start = current_start - timedelta(days=1)
+        previous_end = previous_start.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        current_label = "Today"
+        previous_label = "Yesterday"
+    
+    elif mode == 'week':
+        # Current Period: This Week (Monday 00:00:00 to Sunday 23:59:59)
+        days_since_monday = now.weekday()  # Monday=0, Sunday=6
+        current_start = now - timedelta(days=days_since_monday)
+        current_start = current_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        current_end = current_start + timedelta(days=7) - timedelta(seconds=1)
+        
+        # Previous Period: Last Week (7 days before current week)
+        previous_start = current_start - timedelta(days=7)
+        previous_end = previous_start + timedelta(days=7) - timedelta(seconds=1)
+        
+        current_label = "This Week"
+        previous_label = "Last Week"
+    
+    elif mode == 'month':
+        # Current Period: This Month (1st 00:00:00 to last day 23:59:59)
+        current_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Calculate last day of current month
+        if now.month == 12:
+            next_month_start = datetime(now.year + 1, 1, 1, tzinfo=NAIROBI_TZ)
+        else:
+            next_month_start = datetime(now.year, now.month + 1, 1, tzinfo=NAIROBI_TZ)
+        
+        current_end = next_month_start - timedelta(seconds=1)
+        
+        # Previous Period: Last Month
+        previous_end = current_start - timedelta(seconds=1)
+        previous_start = previous_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        current_label = now.strftime('%B %Y')  # e.g., "January 2026"
+        previous_label = previous_start.strftime('%B %Y')  # e.g., "December 2025"
+    
+    else:
+        # Default to day comparison if invalid mode
+        current_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        current_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        previous_start = current_start - timedelta(days=1)
+        previous_end = previous_start.replace(hour=23, minute=59, second=59, microsecond=999999)
+        current_label = "Today"
+        previous_label = "Yesterday"
+    
+    print(f"""
+    📅 Date Ranges Calculated:
+    Previous: {previous_start.strftime('%Y-%m-%d %H:%M')} → {previous_end.strftime('%Y-%m-%d %H:%M')}
+    Current:  {current_start.strftime('%Y-%m-%d %H:%M')} → {current_end.strftime('%Y-%m-%d %H:%M')}
+    """)
+    
+    # ============================================================================
+    # STEP 2: DEFINE CALCULATION FUNCTION
+    # ============================================================================
+    
+    def calculate_period_stats(start_date, end_date):
+        """
+        Calculate financial stats for a given period
+        
+        Returns:
+        - total_sales: All money collected (including partial payments on old orders)
+        - total_expenses: All expenses incurred
+        - total_debt: Debt accumulated from new orders in this period
+        - net: Total Sales - Total Expenses
+        - orders_count: Number of orders created in this period
+        """
+        total_sales = 0
+        total_expenses = 0
+        total_debt = 0
+        orders_count = 0
+        
+        # Fetch all orders once (performance optimization)
+        all_orders = list(orders_collection.find())
+        
+        # ========================================
+        # CALCULATE SALES FROM NEW ORDERS
+        # ========================================
+        for order in all_orders:
+            order_date = process_date(order.get('date'))
+            
+            # Check if order was created in this period
+            if order_date and start_date <= order_date <= end_date:
+                payment = float(order.get('payment', 0))
+                balance = float(order.get('balance', 0))
+                
+                # Add payment to total sales
+                total_sales += payment
+                
+                # Add unpaid balance to debt
+                total_debt += balance
+                
+                # Count this order
+                orders_count += 1
+                
+                print(f"  📦 Order in period: {order.get('receipt_id')} | Sales: +{payment} | Debt: +{balance}")
+        
+        # ========================================
+        # CALCULATE PARTIAL PAYMENTS ON OLD ORDERS
+        # ========================================
+        for order in all_orders:
+            order_date = process_date(order.get('date'))
+            
+            # Skip if order was created in this period (already counted above)
+            if order_date and start_date <= order_date <= end_date:
+                continue
+            
+            # Check payment history for payments made in this period
+            payment_history = order.get('payment_history', [])
+            for entry in payment_history:
+                pay_date = process_date(entry.get('date'))
+                amount = float(entry.get('amount', 0))
+                
+                # If payment was made in this period, count it
+                if pay_date and amount > 0 and start_date <= pay_date <= end_date:
+                    total_sales += amount
+                    print(f"  💳 Old order payment: {order.get('receipt_id')} | +{amount}")
+        
+        # ========================================
+        # ADD RETAIL COLLECTION (LEGACY)
+        # ========================================
+        retail_payments = db["retail"].find({"date": {"$gte": start_date, "$lte": end_date}})
+        for retail in retail_payments:
+            amount = float(retail.get('amount', 0))
+            if amount > 0:
+                total_sales += amount
+                print(f"  🛍️ Retail collection: +{amount}")
+        
+        # ========================================
+        # CALCULATE EXPENSES
+        # ========================================
+        expenses_in_period = db["expenses"].find({"date": {"$gte": start_date, "$lte": end_date}})
+        for expense in expenses_in_period:
+            amount = float(expense.get('amount', 0))
+            total_expenses += amount
+            print(f"  💸 Expense: -{amount}")
+        
+        # ========================================
+        # CALCULATE NET (Sales - Expenses)
+        # ========================================
+        # Note: We don't subtract debt from NET because debt is money owed, not money lost
+        net = total_sales - total_expenses
+        
+        return {
+            'sales': round(total_sales, 2),
+            'expenses': round(total_expenses, 2),
+            'debt': round(total_debt, 2),
+            'net': round(net, 2),
+            'orders_count': orders_count
+        }
+    
+    # ============================================================================
+    # STEP 3: CALCULATE STATS FOR BOTH PERIODS
+    # ============================================================================
+    
+    print(f"\n📊 Calculating stats for PREVIOUS period ({previous_label})...")
+    previous_stats = calculate_period_stats(previous_start, previous_end)
+    
+    print(f"\n📊 Calculating stats for CURRENT period ({current_label})...")
+    current_stats = calculate_period_stats(current_start, current_end)
+    
+    # ============================================================================
+    # STEP 4: CALCULATE GROWTH METRICS
+    # ============================================================================
+    
+    # Absolute growth (difference in NET)
+    growth = current_stats['net'] - previous_stats['net']
+    
+    # Percentage growth (avoid division by zero)
+    if previous_stats['net'] > 0:
+        growth_percent = (growth / previous_stats['net']) * 100
+    elif previous_stats['net'] == 0 and current_stats['net'] > 0:
+        growth_percent = 100  # From 0 to positive = 100% growth
+    elif previous_stats['net'] == 0 and current_stats['net'] == 0:
+        growth_percent = 0  # No change
+    else:
+        # Previous was negative, current is less negative or positive
+        growth_percent = 0  # Edge case, handle as no percentage
+    
+    
+    # ============================================================================
+    # STEP 6: RETURN JSON RESPONSE
+    # ============================================================================
+    
+    response_data = {
+        'success': True,
+        'mode': mode,
+        
+        # Previous Period Data
+        'previous_label': previous_label,
+        'previous_sales': previous_stats['sales'],
+        'previous_expenses': previous_stats['expenses'],
+        'previous_debt': previous_stats['debt'],
+        'previous_net': previous_stats['net'],
+        'previous_orders_count': previous_stats['orders_count'],
+        
+        # Current Period Data
+        'current_label': current_label,
+        'current_sales': current_stats['sales'],
+        'current_expenses': current_stats['expenses'],
+        'current_debt': current_stats['debt'],
+        'current_net': current_stats['net'],
+        'current_orders_count': current_stats['orders_count'],
+        
+        # Growth Metrics
+        'growth': round(growth, 2),
+        'growth_percent': round(growth_percent, 1),
+        'is_positive': growth >= 0
+    }
+    
+    print(f"✅ Comparison data ready, sending response...")
+    
+    return jsonify(response_data)
+
+
+# ============================================================================
+# HISTORICAL REPORTS ROUTES
+# ============================================================================
 @app.route('/reports')
 def reports():
     time_filter = request.args.get('time', 'month')
@@ -4586,7 +4678,7 @@ def reports():
                          total_debt=total_debt_value,
                          recent_reports=recent_reports,
                          orders=orders)
-#exports
+
 
 @app.route('/sales_report')
 @login_required
@@ -4848,290 +4940,6 @@ def sales_report():
         total_mpesa=total_mpesa,
         total_cash=total_cash
     )
-
-# ============================================================================
-# COMPARISON API - Compare Previous vs Current Period Performance
-# ============================================================================
-
-@app.route('/api/comparison')
-@login_required
-def get_comparison_data():
-    """
-    Compare previous period vs current period NET sales
-    NET = Total Sales - Expenses (Debt is tracked separately, not subtracted from NET)
-    
-    Modes:
-    - day: Yesterday vs Today
-    - week: Last Week vs This Week
-    - month: Last Month vs This Month
-    
-    Returns JSON with previous/current stats and growth metrics
-    """
-    mode = request.args.get('mode', 'day')
-    now = datetime.now(NAIROBI_TZ)
-    
-    print(f"📊 Comparison API called: mode={mode}")
-    
-    # ============================================================================
-    # STEP 1: CALCULATE DATE RANGES BASED ON MODE
-    # ============================================================================
-    
-    if mode == 'day':
-        # Current Period: Today (00:00:00 to 23:59:59)
-        current_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        current_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        # Previous Period: Yesterday (00:00:00 to 23:59:59)
-        previous_start = current_start - timedelta(days=1)
-        previous_end = previous_start.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        current_label = "Today"
-        previous_label = "Yesterday"
-    
-    elif mode == 'week':
-        # Current Period: This Week (Monday 00:00:00 to Sunday 23:59:59)
-        days_since_monday = now.weekday()  # Monday=0, Sunday=6
-        current_start = now - timedelta(days=days_since_monday)
-        current_start = current_start.replace(hour=0, minute=0, second=0, microsecond=0)
-        current_end = current_start + timedelta(days=7) - timedelta(seconds=1)
-        
-        # Previous Period: Last Week (7 days before current week)
-        previous_start = current_start - timedelta(days=7)
-        previous_end = previous_start + timedelta(days=7) - timedelta(seconds=1)
-        
-        current_label = "This Week"
-        previous_label = "Last Week"
-    
-    elif mode == 'month':
-        # Current Period: This Month (1st 00:00:00 to last day 23:59:59)
-        current_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
-        # Calculate last day of current month
-        if now.month == 12:
-            next_month_start = datetime(now.year + 1, 1, 1, tzinfo=NAIROBI_TZ)
-        else:
-            next_month_start = datetime(now.year, now.month + 1, 1, tzinfo=NAIROBI_TZ)
-        
-        current_end = next_month_start - timedelta(seconds=1)
-        
-        # Previous Period: Last Month
-        previous_end = current_start - timedelta(seconds=1)
-        previous_start = previous_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
-        current_label = now.strftime('%B %Y')  # e.g., "January 2026"
-        previous_label = previous_start.strftime('%B %Y')  # e.g., "December 2025"
-    
-    else:
-        # Default to day comparison if invalid mode
-        current_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        current_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        previous_start = current_start - timedelta(days=1)
-        previous_end = previous_start.replace(hour=23, minute=59, second=59, microsecond=999999)
-        current_label = "Today"
-        previous_label = "Yesterday"
-    
-    print(f"""
-    📅 Date Ranges Calculated:
-    Previous: {previous_start.strftime('%Y-%m-%d %H:%M')} → {previous_end.strftime('%Y-%m-%d %H:%M')}
-    Current:  {current_start.strftime('%Y-%m-%d %H:%M')} → {current_end.strftime('%Y-%m-%d %H:%M')}
-    """)
-    
-    # ============================================================================
-    # STEP 2: DEFINE CALCULATION FUNCTION
-    # ============================================================================
-    
-    def calculate_period_stats(start_date, end_date):
-        """
-        Calculate financial stats for a given period
-        
-        Returns:
-        - total_sales: All money collected (including partial payments on old orders)
-        - total_expenses: All expenses incurred
-        - total_debt: Debt accumulated from new orders in this period
-        - net: Total Sales - Total Expenses
-        - orders_count: Number of orders created in this period
-        """
-        total_sales = 0
-        total_expenses = 0
-        total_debt = 0
-        orders_count = 0
-        
-        # Fetch all orders once (performance optimization)
-        all_orders = list(orders_collection.find())
-        
-        # ========================================
-        # CALCULATE SALES FROM NEW ORDERS
-        # ========================================
-        for order in all_orders:
-            order_date = process_date(order.get('date'))
-            
-            # Check if order was created in this period
-            if order_date and start_date <= order_date <= end_date:
-                payment = float(order.get('payment', 0))
-                balance = float(order.get('balance', 0))
-                
-                # Add payment to total sales
-                total_sales += payment
-                
-                # Add unpaid balance to debt
-                total_debt += balance
-                
-                # Count this order
-                orders_count += 1
-                
-                print(f"  📦 Order in period: {order.get('receipt_id')} | Sales: +{payment} | Debt: +{balance}")
-        
-        # ========================================
-        # CALCULATE PARTIAL PAYMENTS ON OLD ORDERS
-        # ========================================
-        for order in all_orders:
-            order_date = process_date(order.get('date'))
-            
-            # Skip if order was created in this period (already counted above)
-            if order_date and start_date <= order_date <= end_date:
-                continue
-            
-            # Check payment history for payments made in this period
-            payment_history = order.get('payment_history', [])
-            for entry in payment_history:
-                pay_date = process_date(entry.get('date'))
-                amount = float(entry.get('amount', 0))
-                
-                # If payment was made in this period, count it
-                if pay_date and amount > 0 and start_date <= pay_date <= end_date:
-                    total_sales += amount
-                    print(f"  💳 Old order payment: {order.get('receipt_id')} | +{amount}")
-        
-        # ========================================
-        # ADD RETAIL COLLECTION (LEGACY)
-        # ========================================
-        retail_payments = db["retail"].find({"date": {"$gte": start_date, "$lte": end_date}})
-        for retail in retail_payments:
-            amount = float(retail.get('amount', 0))
-            if amount > 0:
-                total_sales += amount
-                print(f"  🛍️ Retail collection: +{amount}")
-        
-        # ========================================
-        # CALCULATE EXPENSES
-        # ========================================
-        expenses_in_period = db["expenses"].find({"date": {"$gte": start_date, "$lte": end_date}})
-        for expense in expenses_in_period:
-            amount = float(expense.get('amount', 0))
-            total_expenses += amount
-            print(f"  💸 Expense: -{amount}")
-        
-        # ========================================
-        # CALCULATE NET (Sales - Expenses)
-        # ========================================
-        # Note: We don't subtract debt from NET because debt is money owed, not money lost
-        net = total_sales - total_expenses
-        
-        return {
-            'sales': round(total_sales, 2),
-            'expenses': round(total_expenses, 2),
-            'debt': round(total_debt, 2),
-            'net': round(net, 2),
-            'orders_count': orders_count
-        }
-    
-    # ============================================================================
-    # STEP 3: CALCULATE STATS FOR BOTH PERIODS
-    # ============================================================================
-    
-    print(f"\n📊 Calculating stats for PREVIOUS period ({previous_label})...")
-    previous_stats = calculate_period_stats(previous_start, previous_end)
-    
-    print(f"\n📊 Calculating stats for CURRENT period ({current_label})...")
-    current_stats = calculate_period_stats(current_start, current_end)
-    
-    # ============================================================================
-    # STEP 4: CALCULATE GROWTH METRICS
-    # ============================================================================
-    
-    # Absolute growth (difference in NET)
-    growth = current_stats['net'] - previous_stats['net']
-    
-    # Percentage growth (avoid division by zero)
-    if previous_stats['net'] > 0:
-        growth_percent = (growth / previous_stats['net']) * 100
-    elif previous_stats['net'] == 0 and current_stats['net'] > 0:
-        growth_percent = 100  # From 0 to positive = 100% growth
-    elif previous_stats['net'] == 0 and current_stats['net'] == 0:
-        growth_percent = 0  # No change
-    else:
-        # Previous was negative, current is less negative or positive
-        growth_percent = 0  # Edge case, handle as no percentage
-    
-    # ============================================================================
-    # STEP 5: PRINT SUMMARY TO CONSOLE
-    # ============================================================================
-    
-    print(f"""
-    
-    ════════════════════════════════════════════════════════════
-    📊 COMPARISON SUMMARY ({mode.upper()})
-    ════════════════════════════════════════════════════════════
-    
-    PREVIOUS PERIOD ({previous_label}):
-    ├─ Sales:    KSh {previous_stats['sales']:>12,.2f}
-    ├─ Expenses: KSh {previous_stats['expenses']:>12,.2f}
-    ├─ Debt:     KSh {previous_stats['debt']:>12,.2f}
-    ├─ Orders:   {previous_stats['orders_count']:>12}
-    └─ NET:      KSh {previous_stats['net']:>12,.2f}
-    
-    CURRENT PERIOD ({current_label}):
-    ├─ Sales:    KSh {current_stats['sales']:>12,.2f}
-    ├─ Expenses: KSh {current_stats['expenses']:>12,.2f}
-    ├─ Debt:     KSh {current_stats['debt']:>12,.2f}
-    ├─ Orders:   {current_stats['orders_count']:>12}
-    └─ NET:      KSh {current_stats['net']:>12,.2f}
-    
-    GROWTH:
-    ├─ NET Change:   KSh {growth:>12,.2f} ({'+' if growth >= 0 else ''}{growth_percent:.1f}%)
-    └─ Trend:        {'📈 Growing' if growth > 0 else '📉 Declining' if growth < 0 else '➡️ Stable'}
-    
-    ════════════════════════════════════════════════════════════
-    """)
-    
-    # ============================================================================
-    # STEP 6: RETURN JSON RESPONSE
-    # ============================================================================
-    
-    response_data = {
-        'success': True,
-        'mode': mode,
-        
-        # Previous Period Data
-        'previous_label': previous_label,
-        'previous_sales': previous_stats['sales'],
-        'previous_expenses': previous_stats['expenses'],
-        'previous_debt': previous_stats['debt'],
-        'previous_net': previous_stats['net'],
-        'previous_orders_count': previous_stats['orders_count'],
-        
-        # Current Period Data
-        'current_label': current_label,
-        'current_sales': current_stats['sales'],
-        'current_expenses': current_stats['expenses'],
-        'current_debt': current_stats['debt'],
-        'current_net': current_stats['net'],
-        'current_orders_count': current_stats['orders_count'],
-        
-        # Growth Metrics
-        'growth': round(growth, 2),
-        'growth_percent': round(growth_percent, 1),
-        'is_positive': growth >= 0
-    }
-    
-    print(f"✅ Comparison data ready, sending response...")
-    
-    return jsonify(response_data)
-
-
-# ============================================================================
-# HISTORICAL REPORTS ROUTES
-# ============================================================================
 
 @app.route('/sales_reports_history')
 @login_required
@@ -5516,9 +5324,9 @@ def export_report():
         mimetype='application/pdf',
         headers={"Content-Disposition": f"attachment;filename={filename}"}
     )
-###                                        notifications ####
 
-# 1. NOTIFICATIONS ENDPOINT - UPDATED
+
+# 1. NOTIFICATIONS ENDPOINT
 @app.route('/api/notifications', methods=['GET'])
 def get_notifications():
     """Get all notifications or filter by status"""
@@ -5688,73 +5496,52 @@ def get_logs():
         print(f"API Error: {str(e)}")
         return jsonify({'error': str(e), 'html': ''}), 500
 
-@app.route('/api/sync/review/<collection>', methods=['GET'])
-def review_sync(collection):
-    # Map collection to its unique key
-    key_map = {
-        "orders": "receipt_id",
-        "clients": "shop_name",
-        "notifications": "notification_id",
-        "expenses": "_id"
-    }
+# INIT 0
+
+@app.route('/logout')
+def logout():
+    """
+    Enhanced logout with comprehensive session tracking.
     
-    key = key_map.get(collection, "_id")
-    missing_data = db_manager.get_sync_diff(collection, key)
+    Handles:
+    - Manual logout (user clicks button)
+    - Abnormal termination detection (power loss, crashes)
+    - Session duration tracking
+    - Clean session cleanup
+    """
+    current_user = get_current_user()
     
-    return jsonify({
-        "collection": collection,
-        "count": len(missing_data),
-        "data": missing_data  # You can view this in your UI
-    })
-
-@app.route('/api/sync/commit/<collection>', methods=['POST'])
-def commit_sync(collection):
-    """Parses and pushes accepted data to local DB"""
-    try:
-        data_to_push = request.json.get('items', [])
-        if not data_to_push:
-            return jsonify({"error": "No data provided"}), 400
-
-        # Clean data: Remove Peer's _id to prevent DuplicateKeyError locally
-        for doc in data_to_push:
-            if '_id' in doc:
-                del doc['_id']
+    if current_user:
+        user_email = current_user.get('email', 'unknown')
+        login_time_str = session.get('login_time')
+        now = datetime.now(NAIROBI_TZ)
         
-        # Insert into local collection
-        result = db[collection].insert_many(data_to_push)
+        # Calculate session duration
+        session_duration = None
+        if login_time_str:
+            try:
+                login_time = datetime.fromisoformat(login_time_str)
+                session_duration = (now - login_time).total_seconds() / 60  # minutes
+            except:
+                pass
         
-        log.info(f"✅ MERGE: Imported {len(result.inserted_ids)} records into {collection}")
-        return jsonify({"status": "success", "imported": len(result.inserted_ids)})
-        
-    except Exception as e:
-        log.error(f"Merge failed: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# Place this inside your app.py
-@app.route('/admin/sync-orders', methods=['GET', 'POST'])
-def manual_sync_route():
-    # Only allow the 'manager' or specific UID from your mock_user
-    if session.get('user', {}).get('role') != 'manager':
-        return "Unauthorized", 403
-
-    if request.method == 'GET':
-        # Just show what is different
-        changes = get_order_diff() 
-        return jsonify({
-            "status": "Review Required",
-            "count": len(changes),
-            "pending_changes": changes
+        # Log manual logout
+        db['session_logs'].insert_one({
+            'email': user_email,
+            'action': 'logout',
+            'logout_type': 'manual',  # User explicitly clicked logout
+            'session_duration_minutes': session_duration,
+            'timestamp': now,
+            'ip_address': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent')
         })
-
-    if request.method == 'POST':
-        # This is the "Click Yes" action
-        # You can call the merge logic here
-        run_manual_merge_logic() 
-        return jsonify({"status": "Success", "message": "Data written to local DB"})
-
-
+        
+        session.clear()
+        flash('You have been logged out successfully.', 'success')
+    
+    return redirect(url_for('splash'))
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)    #ensures accessible
+    app.run(host='0.0.0.0', port=5001, debug=True)    
 

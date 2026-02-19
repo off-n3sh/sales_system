@@ -1,0 +1,35 @@
+{% for order in items %}
+<div class="py-4 flex justify-between items-center border-b border-gray-50 dark:border-gray-700 last:border-0">
+    <div class="flex items-center space-x-3">
+        <div class="p-2 {% if order.balance|float > 0 %}bg-orange-50 text-orange-600{% else %}bg-green-50 text-green-600{% endif %} rounded-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <div>
+            <p class="font-bold text-gray-800 dark:text-gray-200 text-sm">
+                {{ order.customer_name or 'Walk-in Customer' }}
+            </p>
+            <p class="text-[10px] text-gray-500 uppercase tracking-tight">
+                {{ order.date.strftime('%b %d, %H:%M') }} • ID: #{{ order.receipt_id[-6:] if order.receipt_id else 'N/A' }}
+            </p>
+        </div>
+    </div>
+    
+    <div class="text-right">
+        <p class="text-sm font-bold text-gray-900 dark:text-white">
+            KES {{ "{:,}".format(order.total_amount | round(0)) }}
+        </p>
+        
+        {% if order.balance|float > 0 %}
+            <span class="text-[9px] font-bold text-orange-500 bg-orange-100 px-1.5 py-0.5 rounded uppercase">
+                Debt: {{ "{:,}".format(order.balance | round(0)) }}
+            </span>
+        {% else %}
+            <span class="text-[9px] font-bold text-green-500 bg-green-100 px-1.5 py-0.5 rounded uppercase">
+                Fully Paid
+            </span>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}

@@ -1,0 +1,19 @@
+{% for log in items %}
+<div class="py-4 flex justify-between items-center border-b border-gray-50 dark:border-gray-700 last:border-0">
+    <div class="flex items-center space-x-3">
+        <div class="p-2 {% if log.quantity|int > 0 %}bg-green-50 text-green-600{% else %}bg-orange-50 text-orange-600{% endif %} rounded-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        </div>
+        <div>
+            <p class="font-bold text-gray-800 dark:text-gray-200 text-sm">{{ log.item }}</p>
+            <p class="text-[10px] text-gray-500 uppercase">{{ log.date.strftime('%b %d, %H:%M') }} • {{ log.category }}</p>
+        </div>
+    </div>
+    <div class="text-right">
+        <p class="text-sm font-bold {% if log.quantity|int > 0 %}text-green-600{% else %}text-orange-600{% endif %}">
+            {{ "+" if log.quantity|int > 0 }}{{ log.quantity }}
+        </p>
+        <p class="text-[10px] text-gray-400 italic">{{ log.action | replace('_', ' ') }}</p>
+    </div>
+</div>
+{% endfor %}

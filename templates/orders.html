@@ -1,0 +1,760 @@
+{% extends "bases.html" %}
+{% block title %}Orders{% endblock %}
+{% block header %}Orders{% endblock %}
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Order Creation Section -->
+    <div class="mb-6 flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Orders Management</h1>
+        <div class="space-x-2">
+            <button type="button" id="open-retail-modal" class="btn bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg">
+                New Retail Order
+            </button>
+            <button type="button" id="open-wholesale-modal" class="btn bg-green-500 text-white hover:bg-green-600 px-4 py-2 rounded-lg">
+                New Wholesale Order
+            </button>
+            <button type="button" id="open-expense-modal" class="btn bg-purple-500 text-white hover:bg-purple-600 px-4 py-2 rounded-lg">
+                Add Expense
+            </button>
+        </div>
+    </div>
+
+    <!-- Order Filters and Search -->
+    <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:space-x-4">
+        <div class="flex space-x-2 mb-2 sm:mb-0">
+            <button data-filter="all" class="filter-btn px-4 py-2 rounded-lg bg-blue-500 text-white">All Orders</button>
+            <button data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Pending</button>
+            <button data-filter="paid" class="filter-btn px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Paid</button>
+        </div>
+        <div class="relative w-full sm:w-64">
+            <input type="text" id="order-search" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Search orders...">
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="overflow-x-auto">
+        <table id="orders-table" class="min-w-full bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <thead>
+                <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-sm leading-normal">
+                    <th class="py-3 px-6 text-left">Order #</th>
+                    <th class="py-3 px-6 text-left">Client</th>
+                    <th class="py-3 px-6 text-center">Total Items</th>
+                    <th class="py-3 px-6 text-center">Date</th>
+                    <th class="py-3 px-6 text-center">Payment (KSh)</th>
+                    <th class="py-3 px-6 text-center">Balance (KSh)</th>
+                    <th class="py-3 px-6 text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="orders-tbody" class="text-gray-600 dark:text-gray-300 text-sm font-light">
+                {% for order in orders %}
+                <tr class="order-row border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 
+                    {{ 'border-l-4 border-yellow-500' if order.balance > 0 else 'border-l-4 border-green-500' }}"
+                    data-order-type="{{ order.order_type }}"
+                    data-receipt-id="{{ order.receipt_id }}"
+                    data-balance="{{ order.balance }}"
+                    data-date="{{ order.date.strftime('%Y-%m-%d') }}"
+                    data-search="{{ order.receipt_id ~ ' ' ~ (order.shop_name or 'Retail Sale') ~ ' ' ~ order.order_type }}">
+                    <td class="py-3 px-6 text-left whitespace-nowrap">{{ order.receipt_id }}</td>
+                    <td class="py-3 px-6 text-left">
+                        {{ order.shop_name or 'Retail Sale' }}
+                        <br>
+                        <span class="text-xs font-medium {{ 'text-blue-500' if order.order_type == 'retail' else 'text-green-500' }}">
+                            {{ order.order_type|capitalize }}
+                        </span>
+                    </td>
+                    <td class="py-3 px-6 text-center">{{ order.total_items }}</td>
+                    <td class="py-3 px-6 text-center">{{ order.date.strftime('%d/%m/%Y') }}</td>
+                    <td class="py-3 px-6 text-center">{{ order.payment | round(2) }}</td>
+                    <td class="py-3 px-6 text-center {{ 'text-red-600' if order.balance > 0 else 'text-green-600' }}">{{ order.balance | round(2) }}</td>
+                    <td class="py-3 px-6 text-center relative">
+                        <button class="order-actions-btn p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Order actions">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600 dark:text-gray-300" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                            </svg>
+                        </button>
+                        <div class="order-actions-menu hidden absolute right-6 top-12 w-48 bg-white dark:bg-gray-700 rounded-lg shadow-lg z-20 py-1">
+                            <a href="/receipt/{{ order.receipt_id }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600">View Receipt</a>
+                            <button class="edit-order-btn w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600" data-receipt-id="{{ order.receipt_id }}" data-order-type="{{ order.order_type }}" data-shop-name="{{ order.shop_name }}" data-items='{{ order.items_list|tojson|safe }}'>Edit Order</button>
+                            <button class="delete-order-btn w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600" data-receipt-id="{{ order.receipt_id }}">Delete Order</button>
+                            {% if order.balance > 0 %}
+                            <button class="mark-paid-btn w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-gray-100 dark:hover:bg-gray-600" data-receipt-id="{{ order.receipt_id }}" data-balance="{{ order.balance }}">Mark as Paid</button>
+                            <button class="return-stock-btn w-full text-left px-4 py-2 text-sm text-yellow-600 hover:bg-gray-100 dark:hover:bg-gray-600" data-receipt-id="{{ order.receipt_id }}" data-items='{{ order.items_list|tojson|safe }}'>Return Stock</button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- Pagination -->
+    <div class="mt-4 flex justify-between items-center">
+        <button id="prev-page" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50" disabled>Previous</button>
+        <span id="page-info" class="text-gray-600 dark:text-gray-300">Page 1</span>
+        <button id="next-page" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600">Next</button>
+    </div>
+</div>
+
+<!-- Retail Order Modal -->
+<div id="retail-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="retail-modal-title">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+        <h2 id="retail-modal-title" class="text-xl font-bold mb-4 text-gray-900 dark:text-white">New Retail Order</h2>
+        <div id="retail-error" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded mb-4"></div>
+        <form id="retail-form" method="POST" action="/orders" class="space-y-4">
+            <input type="hidden" name="order_type" value="retail">
+            <input type="hidden" name="salesperson_name" value="Current User">
+            
+            <div class="relative">
+                <label for="retail-client-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Client Name</label>
+                <select id="retail-client-input" name="shop_name" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" required></select>
+                <div id="retail-client-debt" class="mt-1 text-sm text-gray-600 dark:text-gray-400 hidden"></div>
+            </div>
+            
+            <div id="retail-items-container" class="space-y-4">
+                <div class="grid grid-cols-6 gap-2 items-center text-sm font-semibold item-row-header">
+                    <span>Item</span>
+                    <span class="text-center">Qty</span>
+                    <span class="text-center">Price</span>
+                    <span class="text-center">Stock</span>
+                    <span class="text-center">Total</span>
+                    <span class="text-center">Action</span>
+                </div>
+                <button type="button" class="add-item-btn w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">Add Item</button>
+            </div>
+            
+            <div class="flex justify-between items-center mt-4">
+                <button type="button" id="add-retail-manual" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">Add Manual Item</button>
+                <div class="text-right"><span class="font-semibold">Subtotal:</span> <span id="retail-order-total" class="ml-2">0.00</span></div>
+            </div>
+            
+            <!-- Payment Section -->
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Payment Method</h3>
+                    
+                    <!-- Toggle Switch -->
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Single Payment</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="payment-toggle" class="sr-only peer">
+                            <div class="w-14 h-7 bg-gradient-to-r from-gray-300 to-gray-400 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer shadow-inner peer-checked:after:translate-x-7 peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-200 after:border-2 after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-md peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-blue-500"></div>
+                        </label>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Dual Payment</span>
+                    </div>
+                </div>
+
+                <!-- Single Payment Mode (Default) -->
+                <div id="single-payment-mode" class="space-y-4">
+                    <div>
+                        <label for="retail-payment-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Payment Type</label>
+                        <select id="retail-payment-type" name="payment_type" class="w-full p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base" required>
+                            <option value="cash">💵 Cash</option>
+                            <option value="mpesa">📱 M-Pesa</option>
+                            <option value="bank_transfer">🏦 Bank Transfer</option>
+                            <option value="credit">💳 Credit</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="retail-amount-paid" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Amount Paid</label>
+                        <input type="number" name="amount_paid" id="retail-amount-paid" placeholder="Enter amount paid (optional)" class="w-full p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" step="0.01">
+                        <div class="text-right mt-2 text-sm">
+                            <span class="font-semibold text-gray-700 dark:text-gray-300">Change:</span> 
+                            <span id="retail-order-change" class="ml-2 font-bold text-green-600 dark:text-green-400">0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dual Payment Mode (Hidden by default) -->
+                <div id="dual-payment-mode" class="hidden space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white dark:bg-gray-600 rounded-lg p-3 border-2 border-green-200 dark:border-green-700">
+                            <label for="retail-cash-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">💵 Cash Amount</label>
+                            <input type="number" name="cash_amount" id="retail-cash-amount" placeholder="0.00" class="w-full p-2 border rounded-lg dark:bg-gray-500 dark:border-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" min="0" step="0.01">
+                        </div>
+                        <div class="bg-white dark:bg-gray-600 rounded-lg p-3 border-2 border-blue-200 dark:border-blue-700">
+                            <label for="retail-mpesa-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">📱 M-Pesa Amount</label>
+                            <input type="number" name="mpesa_amount" id="retail-mpesa-amount" placeholder="0.00" class="w-full p-2 border rounded-lg dark:bg-gray-500 dark:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" step="0.01">
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-100 dark:bg-gray-600 rounded-lg p-3 text-center">
+                        <div class="text-sm space-y-1">
+                            <div>
+                                <span class="font-semibold text-gray-700 dark:text-gray-300">Total Paid:</span> 
+                                <span id="retail-dual-total" class="ml-2 font-bold text-blue-600 dark:text-blue-400">0.00</span>
+                            </div>
+                            <div>
+                                <span class="font-semibold text-gray-700 dark:text-gray-300">Change:</span> 
+                                <span id="retail-dual-change" class="ml-2 font-bold text-green-600 dark:text-green-400">0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex space-x-2 mt-6">
+                <button type="submit" class="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 submit-btn font-medium transition-colors">Submit Order</button>
+                <button type="button" id="close-retail-modal" class="flex-1 bg-red-500 text-white py-3 rounded-lg hover:bg-red-600 font-medium transition-colors">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+<!-- Wholesale Order Modal -->
+<div id="wholesale-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="wholesale-modal-title">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+        <h2 id="wholesale-modal-title" class="text-xl font-bold mb-4 text-gray-900 dark:text-white">New Wholesale Order</h2>
+        <div id="wholesale-error" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded mb-4"></div>
+
+        <form id="wholesale-form" method="POST" action="/orders" class="space-y-4">
+            <input type="hidden" name="order_type" value="wholesale">
+            <input type="hidden" name="salesperson_name" value="Current User">
+
+            <!-- Client -->
+            <div class="relative">
+                <label for="wholesale-client-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Client Name</label>
+                <select id="wholesale-client-input" name="shop_name" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" required></select>
+                <div id="wholesale-client-debt" class="mt-1 text-sm text-gray-600 dark:text-gray-400 hidden"></div>
+            </div>
+
+            <!-- Items -->
+            <div id="wholesale-items-container" class="space-y-4">
+                <div class="grid grid-cols-6 gap-2 items-center text-sm font-semibold item-row-header">
+                    <span>Item</span>
+                    <span class="text-center">Qty</span>
+                    <span class="text-center">Price</span>
+                    <span class="text-center">Stock</span>
+                    <span class="text-center">Total</span>
+                    <span class="text-center">Action</span>
+                </div>
+                <button типу="button" class="add-item-btn w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors">Add Item</button>
+            </div>
+
+            <div class="flex justify-between items-center mt-4">
+                <button type="button" id="add-wholesale-manual" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 transition-colors">Add Manual Item</button>
+                <div class="text-right"><span class="font-semibold">Subtotal:</span> <span id="wholesale-order-total" class="ml-2">0.00</span></div>
+            </div>
+
+            <!-- PAYMENT SECTION -->
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Payment Method</h3>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Single</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="wholesale-payment-toggle" class="sr-only peer">
+                            <div class="w-14 h-7 bg-gradient-to-r from-gray-300 to-gray-400 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer shadow-inner peer-checked:after:translate-x-7 peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-200 after:border-2 after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-md peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-blue-500"></div>
+                        </label>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Dual</span>
+                    </div>
+                </div>
+
+                <!-- SINGLE MODE -->
+                <div id="wholesale-single-payment-mode" class="space-y-4">
+                    <div>
+                        <label for="wholesale-payment-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Payment Type</label>
+                        <select id="wholesale-payment-type" name="payment_type" class="w-full p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base" required>
+                            <option value="cash">Cash</option>
+                            <option value="mpesa">M-Pesa</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="credit">Credit</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="wholesale-amount-paid" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Amount Paid</label>
+                        <input type="number" name="amount_paid" id="wholesale-amount-paid" placeholder="Enter amount paid" class="w-full p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" step="0.01">
+                        <div class="text-right mt-2 text-sm">
+                            <span class="font-semibold text-gray-700 dark:text-gray-300">Change:</span>
+                            <span id="wholesale-order-change" class="ml-2 font-bold text-green-600 dark:text-green-400">0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DUAL MODE — hidden REMOVED — JS CONTROLS IT -->
+                <div id="wholesale-dual-payment-mode" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white dark:bg-gray-600 rounded-lg p-3 border-2 border-green-200 dark:border-green-700">
+                            <label for="wholesale-cash-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cash Amount</label>
+                            <input type="number" name="cash_amount" id="wholesale-cash-amount" placeholder="0.00" class="w-full p-2 border rounded-lg dark:bg-gray-500 dark:border-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" min="0" step="0.01">
+                        </div>
+                        <div class="bg-white dark:bg-gray-600 rounded-lg p-3 border-2 border-blue-200 dark:border-blue-700">
+                            <label for="wholesale-mpesa-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">M-Pesa Amount</label>
+                            <input type="number" name="mpesa_amount" id="wholesale-mpesa-amount" placeholder="0.00" class="w-full p-2 border rounded-lg dark:bg-gray-500 dark:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" step="0.01">
+                        </div>
+                    </div>
+                    <div class="bg-gray-100 dark:bg-gray-600 rounded-lg p-3 text-center">
+                        <div class="text-sm space-y-1">
+                            <div><span class="font-semibold text-gray-700 dark:text-gray-300">Total Paid:</span> <span id="wholesale-dual-total" class="ml-2 font-bold text-blue-600 dark:text-blue-400">0.00</span></div>
+                            <div><span class="font-semibold text-gray-700 dark:text-gray-300">Change:</span> <span id="wholesale-dual-change" class="ml-2 font-bold text-green-600 dark:text-green-400">0.00</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex space-x-2 mt-6">
+                <button type="submit" class="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 submit-btn font-medium transition-colors">Submit Order</button>
+                <button type="button" id="close-wholesale-modal" class="flex-1 bg-red-500 text-white py-3 rounded-lg hover:bg-red-600 font-medium transition-colors">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Order Modal - NEW STRUCTURE -->
+<div id="edit-order-modal" class="modal fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50" role="dialog" aria-modal="true">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+                Edit Order #<span id="edit-receipt-id"></span>
+            </h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Editing partially paid order - Changes will affect balance
+            </p>
+        </div>
+
+        <div class="p-6 space-y-6">
+            
+            <!-- Error Display -->
+            <div id="edit-error" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded"></div>
+            
+            <!-- Original Order Summary (Read-Only) -->
+            <div class="bg-blue-50 dark:bg-blue-900 border-l-4 border-blue-500 p-4 rounded-lg">
+                <h3 class="font-bold text-lg text-blue-900 dark:text-blue-100 mb-3">📦 Original Order Summary</h3>
+                <div class="grid grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <span class="text-blue-700 dark:text-blue-300">Items:</span>
+                        <span class="font-semibold ml-2" id="original-items-count">0</span>
+                    </div>
+                    <div>
+                        <span class="text-blue-700 dark:text-blue-300">Total:</span>
+                        <span class="font-semibold ml-2">KSh <span id="original-total">0</span></span>
+                    </div>
+                    <div>
+                        <span class="text-blue-700 dark:text-blue-300">Paid:</span>
+                        <span class="font-semibold ml-2 text-green-600">KSh <span id="amount-paid">0</span></span>
+                    </div>
+                    <div>
+                        <span class="text-blue-700 dark:text-blue-300">Balance:</span>
+                        <span class="font-semibold ml-2 text-red-600">KSh <span id="original-balance">0</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Original Items Section -->
+            <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                <div class="bg-gray-100 dark:bg-gray-700 p-4 border-b border-gray-300 dark:border-gray-600">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-white">
+                            🛒 Original Items (Remove Max 2)
+                        </h3>
+                        <div class="text-sm">
+                            <span class="text-gray-600 dark:text-gray-400">Removed:</span>
+                            <span id="removed-count" class="ml-2 font-bold text-lg">0</span>
+                            <span class="text-gray-600 dark:text-gray-400">/2</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-4">
+                    <!-- Column Headers -->
+                    <div class="grid grid-cols-7 gap-2 mb-3 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        <div class="col-span-2">Item</div>
+                        <div class="text-center">Qty</div>
+                        <div class="text-center">Price</div>
+                        <div class="text-center">Stock</div>
+                        <div class="text-center">Total</div>
+                        <div class="text-center">Action</div>
+                    </div>
+                    
+                    <!-- Original Items List -->
+                    <div id="original-items-list" class="space-y-2">
+                        <!-- Items will be inserted here by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Items Section -->
+            <div class="border border-green-300 dark:border-green-600 rounded-lg overflow-hidden">
+                <div class="bg-green-100 dark:bg-green-900 p-4 border-b border-green-300 dark:border-green-600">
+                    <h3 class="font-bold text-lg text-green-900 dark:text-green-100">
+                        ➕ New Items (Add Unlimited)
+                    </h3>
+                </div>
+                
+                <div class="p-4">
+                    <!-- Column Headers -->
+                    <div class="grid grid-cols-7 gap-2 mb-3 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        <div class="col-span-2">Item</div>
+                        <div class="text-center">Qty</div>
+                        <div class="text-center">Price</div>
+                        <div class="text-center">Stock</div>
+                        <div class="text-center">Total</div>
+                        <div class="text-center">Action</div>
+                    </div>
+                    
+                    <!-- New Items List -->
+                    <div id="new-items-list" class="space-y-2 mb-3">
+                        <!-- New items will be inserted here by JS -->
+                    </div>
+                    
+                    <!-- Add Item Button -->
+                    <button type="button" id="add-new-item" 
+                        class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Add Item
+                    </button>
+                </div>
+            </div>
+
+            <!-- New Balance Summary -->
+            <div class="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900 dark:to-pink-900 border-l-4 border-purple-500 p-5 rounded-lg">
+                <h3 class="font-bold text-lg text-purple-900 dark:text-purple-100 mb-4">💰 New Balance Calculation</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center text-lg">
+                        <span class="text-purple-700 dark:text-purple-300 font-semibold">New Total:</span>
+                        <span class="font-bold text-purple-900 dark:text-purple-100">
+                            KSh <span id="new-total">0.00</span>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
+                        <span>Amount Already Paid:</span>
+                        <span class="font-semibold text-green-600">
+                            - KSh <span id="paid-amount">0.00</span>
+                        </span>
+                    </div>
+                    <div class="border-t-2 border-purple-300 dark:border-purple-600 pt-3 mt-3">
+                        <div class="flex justify-between items-center text-xl">
+                            <span class="font-bold text-purple-900 dark:text-purple-100">New Balance:</span>
+                            <span class="font-bold text-2xl" id="new-balance">0.00</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            * Negative balance means customer overpaid and may be due a refund
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reason for Edit (Required) -->
+            <div>
+                <label for="edit-reason" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                    📝 Reason for Edit <span class="text-red-500">*</span>
+                </label>
+                <textarea 
+                    id="edit-reason" 
+                    rows="3" 
+                    class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                    placeholder="e.g., Customer requested to remove 2 items and add 1 new item..."
+                    required
+                ></textarea>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    ⚠️ This will be permanently logged in the order history for audit purposes
+                </p>
+            </div>
+
+        </div>
+
+        <!-- Footer Actions (Sticky) -->
+        <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-6 flex gap-4">
+            <button type="button" id="save-edit" 
+                class="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-lg transition shadow-lg">
+                💾 Update Order
+            </button>
+            <button type="button" id="close-edit-modal" 
+                class="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-3 rounded-lg transition shadow-lg">
+                ❌ Cancel
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<style>
+/* Custom styling for edit modal */
+#edit-order-modal .item-row {
+    transition: all 0.3s ease;
+}
+
+#edit-order-modal .item-row:hover {
+    transform: translateX(4px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+#edit-order-modal .remove-item-btn,
+#edit-order-modal .delete-new-item-btn {
+    transition: all 0.2s ease;
+}
+
+#edit-order-modal .remove-item-btn:hover,
+#edit-order-modal .delete-new-item-btn:hover {
+    transform: scale(1.05);
+}
+
+#edit-order-modal input[readonly] {
+    cursor: not-allowed;
+}
+
+#edit-order-modal .bg-red-50 {
+    animation: fadeIn 0.3s ease;
+}
+
+#edit-order-modal .bg-green-50 {
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { 
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Smooth scrolling */
+#edit-order-modal {
+    scroll-behavior: smooth;
+}
+
+/* Better focus states */
+#edit-order-modal input:focus,
+#edit-order-modal select:focus,
+#edit-order-modal textarea:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: rgb(168, 85, 247);
+}
+</style>
+
+<div id="expenseModal" class="modal fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 transition-all" role="dialog" aria-modal="true" aria-labelledby="expense-modal-title">
+    <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md border border-gray-200 dark:border-gray-700">
+        
+        <div class="flex justify-between items-center mb-6">
+            <h2 id="expense-modal-title" class="text-2xl font-bold text-gray-900 dark:text-white">Add Expense</h2>
+            <button type="button" id="close-x" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl">&times;</button>
+        </div>
+
+        <div id="expense-error" class="hidden bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded mb-4 text-sm"></div>
+
+        <form id="expense-form" method="POST" action="/expenses" enctype="multipart/form-data" class="space-y-5">
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expense Category</label>
+                <select name="category" id="expense-category" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required onchange="updateFormFields()">
+                    <option value="" disabled selected>Select a category</option>
+                    <option value="Stock">📦 Stock Purchase</option>
+                    <option value="Fuel">⛽ Fuel</option>
+                    <option value="Lunch">🍱 Lunch/Meals</option>
+                    <option value="Other">🛠️ Others</option>
+                </select>
+            </div>
+
+            <div id="section-stock" class="hidden space-y-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">Item Name</label>
+                    <input name="stock_name" placeholder="e.g. Engine Oil" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">Unit Price</label>
+                    <input name="unit_price" type="number" step="0.01" placeholder="0.00" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                </div>
+            </div>
+
+            <div id="section-description">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes / Description</label>
+                <textarea name="description" rows="2" placeholder="e.g. Paid electricity bill or Lunch for team" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total Amount Paid</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-2.5 text-gray-500 dark:text-gray-400">$</span>
+                    <input name="amount" type="number" step="0.01" placeholder="0.00" class="w-full p-2.5 pl-7 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Receipt Photo (Optional)</label>
+                <input type="file" name="receipt" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            </div>
+
+            <div class="flex space-x-3 pt-4">
+                <button type="submit" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md">Save Expense</button>
+                <button type="button" id="close-expense-modal" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition duration-200">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Mark as Paid Modal -->
+<div id="mark-paid-modal" class="modal hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="mark-paid-modal-title">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <!-- Header -->
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+            <h3 id="mark-paid-modal-title" class="text-xl font-semibold text-gray-900 dark:text-white">
+                Process Payment
+            </h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Order #<span id="paid-order-id" class="font-mono font-medium"></span>
+            </p>
+        </div>
+
+        <!-- Error Alert -->
+        <div id="mark-paid-error" class="hidden mx-6 mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm"></div>
+
+        <!-- Form -->
+        <form id="mark-paid-form" method="POST" action="" class="p-6 space-y-5">
+            
+            <!-- Payment Method Toggle -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Payment Method</label>
+                <div class="grid grid-cols-3 gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                    <button type="button" class="payment-method-btn active px-4 py-2 rounded-md text-sm font-medium transition-all" data-method="cash">
+                        Cash
+                    </button>
+                    <button type="button" class="payment-method-btn px-4 py-2 rounded-md text-sm font-medium transition-all" data-method="mpesa">
+                        M-Pesa
+                    </button>
+                    <button type="button" class="payment-method-btn px-4 py-2 rounded-md text-sm font-medium transition-all" data-method="dual">
+                        Both
+                    </button>
+                </div>
+            </div>
+
+            <!-- Single Payment Input (Cash or M-Pesa) -->
+            <div id="single-payment-section">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Amount Paid <span class="text-gray-500">(KSh)</span>
+                </label>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">KSh</span>
+                    <input 
+                        id="paid-amount" 
+                        name="amount_paid" 
+                        type="number" 
+                        placeholder="0.00" 
+                        class="w-full pl-14 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                        min="0" 
+                        step="0.01"
+                    >
+                </div>
+                <p id="full-amount-text" class="text-sm text-gray-600 dark:text-gray-400 mt-2"></p>
+            </div>
+
+            <!-- Dual Payment Inputs -->
+            <div id="dual-payment-section" class="hidden space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Cash Amount <span class="text-gray-500">(KSh)</span>
+                    </label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">KSh</span>
+                        <input 
+                            id="cash-amount" 
+                            name="cash_amount" 
+                            type="number" 
+                            placeholder="0.00" 
+                            class="w-full pl-14 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" 
+                            min="0" 
+                            step="0.01"
+                        >
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        M-Pesa Amount <span class="text-gray-500">(KSh)</span>
+                    </label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">KSh</span>
+                        <input 
+                            id="mpesa-amount" 
+                            name="mpesa_amount" 
+                            type="number" 
+                            placeholder="0.00" 
+                            class="w-full pl-14 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" 
+                            min="0" 
+                            step="0.01"
+                        >
+                    </div>
+                </div>
+
+                <!-- Total Display for Dual Payment -->
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-700 dark:text-gray-300">Total Payment:</span>
+                        <span id="dual-total" class="font-semibold text-blue-700 dark:text-blue-400">KSh 0.00</span>
+                    </div>
+                </div>
+                <p id="dual-full-amount-text" class="text-sm text-gray-600 dark:text-gray-400"></p>
+            </div>
+
+            <!-- Hidden input for payment type -->
+            <input type="hidden" id="payment-type" name="payment_type" value="cash">
+            <input type="hidden" id="is-dual-payment" name="is_dual_payment" value="false">
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 pt-2">
+                <button 
+                    type="button" 
+                    id="close-paid-modal" 
+                    class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
+                >
+                    Cancel
+                </button>
+                <button 
+                    type="submit" 
+                    class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium shadow-sm hover:shadow-md submit-btn"
+                >
+                    Process Payment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Return Stock Modal -->
+<div id="return-stock-modal" class="modal hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="return-stock-modal-title">
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg w-96 max-h-[80vh] overflow-y-auto">
+        <h3 id="return-stock-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Return Stock for Order #<span id="return-order-id"></span></h3>
+        <div id="return-error" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded mb-4"></div>
+        <form id="return-stock-form" method="POST" action="" class="space-y-4">
+            <div>
+                <label class="font-semibold text-gray-900 dark:text-white">Select Items to Return</label>
+                <div id="return-stock-items-container" class="space-y-3 mt-2"></div>
+            </div>
+            <div class="flex space-x-2">
+                <button type="submit" class="btn btn-primary bg-yellow-500 hover:bg-yellow-600 flex-1 submit-btn">Submit</button>
+                <button type="button" id="close-return-modal" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 flex-1">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- External CSS and JavaScript -->
+<script>
+    window.userRole = 'manager';
+</script>
+<link rel="stylesheet" href="/static/css/choices.min.css" />
+<link rel="stylesheet" href="/static/css/tailwind.css">
+<link rel="stylesheet" href="/static/css/orders.css" />
+<script src="/static/js/choices.min.js"></script>
+<script type="module" src="/static/js/utils.js"></script>
+<script type="module" src="/static/js/retailModal.js"></script>
+<script type="module" src="/static/js/wholesaleModal.js"></script>
+<script type="module" src="/static/js/expenseModal.js"></script>
+<script type="module" src="/static/js/editOrderModal.js"></script>
+<script type="module" src="/static/js/returnStockModal.js"></script>
+<script type="module" src="/static/js/markPaidModal.js"></script>
+<script type="module" src="/static/js/main.js"></script>
+{% endblock %}

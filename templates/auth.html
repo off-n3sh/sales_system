@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dreamland Enterprises - Login / Signup</title>
+    <link href="{{ url_for('static', filename='css/tailwind.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/fontawesome.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/auth.css') }}" rel="stylesheet">
+</head>
+<body class="min-h-screen flex items-center justify-center">
+    <div class="fixed inset-0 z-0">
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-gray-900 opacity-80"></div>
+        <div id="particles-js" class="absolute inset-0"></div>
+    </div>
+    <div class="flex flex-col md:flex-row w-full max-w-4xl shadow-2xl rounded-lg z-10 relative bg-white/10 backdrop-blur-sm">
+        <div class="hidden md:flex md:flex-col md:justify-between w-full md:w-1/2 bg-gradient-to-br from-gray-900/70 to-blue-600/50 p-8 text-white backdrop-blur-sm">
+            <div class="animate-fade-in space-y-6">
+                <div class="flex items-center space-x-3">
+                    <div class="h-10 w-10 rounded-lg bg-blue-400 flex items-center justify-center">
+                        <i class="fas fa-star text-white text-lg"></i>
+                    </div>
+                    <h1 class="text-3xl font-bold">Dreamland</h1>
+                </div>
+                <h2 class="text-2xl font-bold mt-6">Welcome to Your Wholesale Solution</h2>
+                <p class="text-lg opacity-80">Transform your business with premium products at unbeatable prices.</p>
+                <div class="grid grid-cols-2 gap-4 mt-6">
+                    <div class="flex items-center space-x-2"><div class="h-8 w-8 rounded-full bg-blue-400/20 flex items-center justify-center"><i class="fas fa-check text-blue-300"></i></div><span>Bulk Discounts</span></div>
+                    <div class="flex items-center space-x-2"><div class="h-8 w-8 rounded-full bg-blue-400/20 flex items-center justify-center"><i class="fas fa-check text-blue-300"></i></div><span>Secure Orders</span></div>
+                    <div class="flex items-center space-x-2"><div class="h-8 w-8 rounded-full bg-blue-400/20 flex items-center justify-center"><i class="fas fa-check text-blue-300"></i></div><span>Fast Delivery</span></div>
+                    <div class="flex items-center space-x-2"><div class="h-8 w-8 rounded-full bg-blue-400/20 flex items-center justify-center"><i class="fas fa-check text-blue-300"></i></div><span>24/7 Support</span></div>
+                </div>
+            </div>
+            <div class="animate-fade-in-delay">
+                <div class="flex items-center space-x-4 mt-8">
+                    <div class="h-10 w-10 bg-gray-300 rounded-full overflow-hidden flex items-center justify-center"><i class="fas fa-user text-gray-600"></i></div>
+                    <div><p class="font-medium">"Dreamland transformed our supply chain efficiency by 60%."</p><p class="text-sm opacity-70">— Mama Kamau, Finance Manager</p></div>
+                </div>
+            </div>
+        </div>
+        <div class="w-full md:w-1/2 bg-white p-8 shadow-xl">
+            <div class="text-center mb-6">
+                <div class="inline-flex rounded-lg p-1 bg-gray-100">
+                    <button id="login-tab" class="px-6 py-2 rounded-lg bg-blue-500 text-white font-semibold transition-all duration-300 shadow-md">Login</button>
+                    <button id="signup-tab" class="px-6 py-2 text-gray-600 font-semibold transition-all duration-300 hover:bg-gray-200 rounded-lg">Signup</button>
+                </div>
+            </div>
+            <form id="login-form" class="space-y-4 animate-fade-in" action="{{ url_for('auth') }}" method="POST">
+                <input type="hidden" name="form_type" value="login">
+                {% if signup_success %}
+                    <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-3 rounded animate-slide-in success-message">
+                        <p class="text-sm">Signup successful! Please verify your email and log in.</p>
+                    </div>
+                {% endif %}
+                <div class="form-group">
+                    <label for="login-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-envelope"></i></span>
+                        <input type="email" id="login-email" name="email" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="flex justify-between items-center mb-1">
+                        <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
+                        <a href="/forgot-password" id="forgot-password" class="text-xs text-blue-600 hover:text-blue-700 hover:underline">Forgot Password?</a>
+                    </div>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-lock"></i></span>
+                        <input type="password" id="login-password" name="password" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                        <button type="button" id="toggle-login-password" class="absolute inset-y-0 right-0 px-3 text-gray-600"><i class="fas fa-eye"></i></button>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2 submit-btn">
+                    <span>Login</span>
+                    <i class="fas fa-arrow-right text-sm"></i>
+                </button>
+            </form>
+            <form id="signup-form" class="space-y-4 hidden animate-fade-in" action="{{ url_for('auth') }}" method="POST">
+                <input type="hidden" name="form_type" value="signup">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label for="signup-firstname" class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-user"></i></span>
+                            <input type="text" id="signup-firstname" name="first_name" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-lastname" class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-user"></i></span>
+                            <input type="text" id="signup-lastname" name="last_name" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signup-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-envelope"></i></span>
+                        <input type="email" id="signup-email" name="email" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signup-phone" class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-phone"></i></span>
+                        <input type="tel" id="signup-phone" name="phone" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signup-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-lock"></i></span>
+                        <input type="password" id="signup-password" name="password" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                        <button type="button" id="toggle-signup-password" class="absolute inset-y-0 right-0 px-3 text-gray-600"><i class="fas fa-eye"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signup-confirm-password" class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-lock"></i></span>
+                        <input type="password" id="signup-confirm-password" name="confirmPassword" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white" required>
+                        <button type="button" id="toggle-signup-confirm-password" class="absolute inset-y-0 right-0 px-3 text-gray-600"><i class="fas fa-eye"></i></button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="signup-role" class="block text-sm font-medium text-gray-700 mb-1">Role Preference</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500"><i class="fas fa-briefcase"></i></span>
+                        <select id="signup-role" name="role" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white appearance-none">
+                            <option value="team_member">Team Member</option>
+                            <option value="manager">Manager</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 pointer-events-none"><i class="fas fa-chevron-down"></i></span>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center space-x-2 submit-btn">
+                    <span>Create Account</span>
+                    <i class="fas fa-user-plus text-sm"></i>
+                </button>
+                <p class="text-sm text-center mt-4">Already have an account? <a href="#" id="switch-to-login" class="text-blue-600 hover:text-blue-700 font-medium hover:underline">Login</a></p>
+            </form>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/particles.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+</body>
+</html>

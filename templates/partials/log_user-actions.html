@@ -1,0 +1,13 @@
+{% for log in items %}
+<div class="py-3 flex items-start space-x-3 border-b border-gray-50 dark:border-gray-700 last:border-0">
+    <div class="mt-1 w-2 h-2 rounded-full bg-blue-400"></div>
+    <div class="flex-1">
+        <div class="flex justify-between items-center">
+            <p class="text-xs font-bold text-gray-800 dark:text-gray-200">{{ log.action }}</p>
+            <span class="text-[9px] text-gray-400">{{ log.date.strftime('%H:%M:%S') }}</span>
+        </div>
+        <p class="text-[10px] text-gray-500">{{ log.details }}</p>
+        <p class="text-[9px] text-blue-500 font-medium">By: {{ log.user_name }}</p>
+    </div>
+</div>
+{% endfor %}

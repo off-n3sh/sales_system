@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Stock{% endblock %}
+
+{% block content %}
+
+    <!-- Add New Stock Button and Form (Manager Only) -->
+    {% if session['user']['role'] == 'manager' %}
+    <div class="mb-8">
+        <button id="toggle-add-stock-form" class="bg-green-500 text-white font-semibold px-5 py-2.5 rounded-md border border-green-600 shadow-md hover:bg-green-600 focus:outline-none transition-colors duration-200">
+            <span class="flex items-center gap-2">
+                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                Add New Stock
+            </span>
+        </button>
+
+        <div id="add-stock-form" class="hidden mt-6 p-8 bg-white rounded-lg shadow-lg border border-gray-200">
+            <h3 class="text-xl font-semibold mb-6 text-gray-900 border-b pb-3">Add New Stock Item</h3>
+            <form method="POST" action="/stock">
+                <input type="hidden" name="action" value="add_stock">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label for="stock_name" class="block text-sm font-medium text-gray-700 mb-1">Stock Name</label>
+                        <input type="text" name="stock_name" id="stock_name" required placeholder="e.g., Action Tembe"
+                               class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                    </div>
+                    <div>
+                        <label for="category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                        <select name="category" id="category" required class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                            <option value="" disabled selected>Select a category</option>
+                            {% for item in stock_items | unique(attribute='category') %}
+                                <option value="{{ item.category }}">{{ item.category }}</option>
+                            {% endfor %}
+                            <option value="new">Add new category...</option>
+                        </select>
+                        <input type="text" name="new_category" id="new_category" placeholder="Enter new category"
+                               class="w-full p-3 border rounded-md shadow-sm mt-2 hidden focus:ring focus:ring-green-200">
+                    </div>
+                    <div>
+                        <label for="initial_quantity" class="block text-sm font-medium text-gray-700 mb-1">Initial Quantity</label>
+                        <input type="number" name="initial_quantity" id="initial_quantity" required min="0" placeholder="e.g., 36"
+                               class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                    </div>
+                    <div>
+                        <label for="reorder_quantity" class="block text-sm font-medium text-gray-700 mb-1">Reorder Quantity</label>
+                        <input type="number" name="reorder_quantity" id="reorder_quantity" required min="0" placeholder="e.g., 5"
+                               class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                    </div>
+                    <div>
+                        <label for="selling_price" class="block text-sm font-medium text-gray-700 mb-1">Retail Price</label>
+                        <input type="number" name="selling_price" id="selling_price" required min="0" step="0.01" placeholder="e.g., 20.00"
+                               class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                    </div>
+                    <div>
+                        <label for="wholesale_price" class="block text-sm font-medium text-gray-700 mb-1">Wholesale Price</label>
+                        <input type="number" name="wholesale_price" id="wholesale_price" required min="0" step="0.01" placeholder="e.g., 18.00"
+                               class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                    </div>
+                    <div>
+                        <label for="company_price" class="block text-sm font-medium text-gray-700 mb-1">Company Price</label>
+                        <input type="number" name="company_price" id="company_price" required min="0" step="0.01" placeholder="e.g., 340.00"
+                               class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                    </div>
+                    <div>
+                        <label for="expire_date" class="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                        <input type="date" name="expire_date" id="expire_date" required
+                               class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-green-200">
+                    </div>
+                </div>
+                <button type="submit"
+                        class="mt-6 bg-green-500 text-white font-medium px-6 py-3 rounded-md border border-green-600 shadow-md hover:bg-green-600 focus:outline-none transition-colors duration-200">
+                    <span class="flex items-center justify-center gap-2">
+                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 3a1 1 0 00-1 1v5H4a1 1 0 100 2h5v5a1 1 0 102 0v-5h5a1 1 0 100-2h-5V4a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        Add Stock
+                    </span>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Search and Filter -->
+    <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 p-4 rounded-lg shadow-sm">
+        <div class="relative w-full sm:w-1/2">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <svg class="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="none">
+                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                </svg>
+            </div>
+            <form method="GET" action="{{ url_for('stock') }}" class="w-full">
+                <input type="text" name="search" id="search" value="{{ search }}" placeholder="Search stock..."
+                       class="w-full p-3 pl-10 border rounded-md shadow-sm focus:ring focus:ring-blue-200">
+            </form>
+        </div>
+        <form method="GET" action="{{ url_for('stock') }}" class="w-full sm:w-1/3">
+            <input type="hidden" name="search" value="{{ search }}">
+            <select name="category" id="category-filter"
+                    onchange="this.form.submit()"
+                    class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-blue-200">
+                <option value="">All Categories</option>
+                {% for item in stock_items | unique(attribute='category') %}
+                    <option value="{{ item.category }}" {% if category == item.category %}selected{% endif %}>
+                        {{ item.category }}
+                    </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <!-- Stock Grid (filled by JS) -->
+    <div id="stock-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+    <!-- Pagination -->
+    <div id="pagination" class="flex justify-center mt-8 gap-2 items-center">
+        {% if has_prev %}
+            <a href="{{ url_for('stock', page=page-1, search=search, category=category) }}"
+               class="px-4 py-2 border rounded bg-white hover:bg-gray-50">Previous</a>
+        {% else %}
+            <button disabled class="px-4 py-2 border rounded bg-gray-200 text-gray-500">Previous</button>
+        {% endif %}
+
+        <span class="px-4 py-2 text-sm font-medium text-gray-700">
+            Page {{ page }} of {{ total_pages }}
+        </span>
+
+        {% if has_next %}
+            <a href="{{ url_for('stock', page=page+1, search=search, category=category) }}"
+               class="px-4 py-2 border rounded bg-white hover:bg-gray-50">Next</a>
+        {% else %}
+            <button disabled class="px-4 py-2 border rounded bg-gray-200 text-gray-500">Next</button>
+        {% endif %}
+    </div>
+
+    <!-- Edit Stock Name Modal (Manager only) -->
+    {% if session['user']['role'] == 'manager' %}
+    <div id="edit-stock-name-modal"
+         class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Edit Stock Name</h3>
+            <form id="edit-stock-name-form" method="POST" action="/stock">
+                <input type="hidden" name="action" value="edit_stock_name">
+                <input type="hidden" name="stock_id" id="edit-stock-id">
+                <div class="mb-4">
+                    <label for="new_stock_name" class="block text-sm font-medium text-gray-700 mb-1">Stock Name</label>
+                    <input type="text" name="new_stock_name" id="new_stock_name" required
+                           class="w-full p-3 border rounded-md shadow-sm focus:ring focus:ring-blue-200">
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" id="cancel-edit-stock-name"
+                            class="bg-gray-300 text-gray-700 font-medium px-4 py-2 rounded-md hover:bg-gray-400">Cancel</button>
+                    <button type="submit"
+                            class="bg-blue-500 text-white font-medium px-4 py-2 rounded-md border border-blue-600 shadow-sm hover:bg-blue-600">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Notification Toast -->
+    <div id="notification-toast"
+         class="fixed bottom-4 right-4 z-50 bg-white rounded-lg shadow-lg p-4 max-w-md transform translate-y-10 opacity-0 transition-all duration-300 hidden">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                <svg class="h-6 w-6 text-red-500" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="ml-3 w-0 flex-1">
+                <p class="text-sm font-medium text-gray-900" id="notification-title">Alert</p>
+                <p class="mt-1 text-sm text-gray-500" id="notification-message"></p>
+            </div>
+            <div class="ml-4 flex-shrink-0 flex">
+                <button class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none"
+                        id="close-notification">
+                    <span class="sr-only">Close</span>
+                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clip-rule="evenodd"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}  <!-- End of content -->
+
+{% block scripts %}
+    <!-- Pass data to JS FIRST -->
+    <script>
+        window.stockData = {{ stock_items | tojson }};
+        window.userRole = "{{ session['user']['role'] }}";
+        window.currentPage = {{ page }};
+        window.totalPages = {{ total_pages }};
+        console.log("Data loaded:", window.stockData.length, "items");
+    </script>
+
+    <!-- THEN load external JS -->
+    <script src="{{ url_for('static', filename='js/stock.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,328 @@
+]{% extends "bases.html" %}
+{% macro format_number(value) %}
+{{ "{:,}".format(value | int) }}
+{% endmacro %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- PROFESSIONAL DASHBOARD HEADER -->
+<!-- ============================================================ -->
+<div class="mb-6">
+    <div class="bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 text-white p-5 rounded-xl shadow-xl border border-blue-600">
+        
+        <!-- Top Row: System Name | User Info | Live Clock -->
+        <div class="flex justify-between items-center border-b border-white/10 pb-4 mb-4">
+            <!-- Left: System Name with Live Indicator -->
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl font-bold tracking-tight">Management System</h1>
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="System Online"></span>
+            </div>
+
+            <!-- Center: User Full Name with Avatar -->
+            <div class="flex items-center space-x-3">
+                <!-- User Avatar (Initials) -->
+                <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-bold text-sm border-2 border-blue-300">
+                    <span id="user-initials">
+                        {% if user %}
+                            {{ user.first_name[0]|upper }}{{ user.last_name[0]|upper }}
+                        {% else %}
+                            SU
+                        {% endif %}
+                    </span>
+                </div>
+                <!-- User Full Name -->
+                <div class="text-center">
+                    <p class="text-lg font-semibold text-white" id="user-fullname">
+                        {% if user %}
+                            {{ user.first_name|title }} {{ user.last_name|title }}
+                        {% else %}
+                            Session User
+                        {% endif %}
+                    </p>
+                    <p class="text-xs text-blue-300">
+                        {% if user %}
+                            {{ user.role|title if user.role else 'User' }}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Right: Live Date & Time -->
+            <div class="text-right">
+                <p id="live-datetime" class="text-sm font-mono text-blue-300"></p>
+                <p class="text-xs text-blue-400 mt-1">East Africa Time</p>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Session Info | Quick Actions -->
+        <div class="flex justify-between items-center">
+            <!-- Left: Session Statistics -->
+            <div class="flex space-x-6 text-xs">
+                <div>
+                    <p class="text-blue-300 uppercase font-semibold">Session Started</p>
+                    <p class="text-white font-mono" id="session-start-time">Loading...</p>
+                </div>
+                <div>
+                    <p class="text-blue-300 uppercase font-semibold">Last Login</p>
+                    <p class="text-white font-mono" id="last-login-display">
+                        {% if last_login_timestamp %}
+                            {{ last_login_timestamp.strftime('%d/%m/%Y') }} {{ last_login_timestamp.strftime('%H:%M') }}
+                        {% else %}
+                            First Login
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Right: Quick Actions -->
+            <div class="flex items-center space-x-4">
+                <a href="#" class="text-sm text-blue-200 hover:text-white transition-colors font-semibold">
+                    📚 FAQs
+                </a>
+                <span class="text-blue-500">|</span>
+                <a href="{{ url_for('logout') }}" class="text-sm text-red-400 hover:text-red-300 transition-colors font-semibold">
+                    🚪 Log out
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Stats Section -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    <!-- Main Stats Column -->
+    <div class="sm:col-span-2 space-y-4 sm:space-y-6">
+        <!-- Total Sales Card -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 sm:p-6 rounded-xl shadow-lg relative overflow-hidden group hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
+            <div class="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white opacity-10 rounded-full -mr-8 sm:-mr-10 -mt-8 sm:-mt-10"></div>
+            <div class="flex items-center justify-between relative z-10">
+                <div>
+                    <h3 class="text-base sm:text-lg font-medium text-blue-100">Today's Business Total Sales</h3>
+                    <p class="text-2xl sm:text-4xl font-bold mt-2" id="total-sales-value">KSh {{ total_sales_today | default(0) | round(2) }}</p>
+                    <p class="text-blue-100 mt-2 text-xs sm:text-sm" id="total-sales-orders">
+                        Today's performance ({{ open_orders_count }} open, {{ closed_orders_count }} closed) - Resets daily
+                    </p>
+                </div>
+                <div class="bg-white bg-opacity-20 p-3 sm:p-4 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 sm:h-10 sm:w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Retail & Wholesale Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <!-- Retail Card -->
+            <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Walk-in Customers</h3>
+                        <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mt-1" id="retail-sales-value">KSh {{ retail_sales_today | default(0) | round(2) }}</p>
+                        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400" id="retail-orders-info">
+                            {{ retail_open_orders }} open, {{ retail_closed_orders }} closed
+                        </div>
+                    </div>
+                    <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wholesale Card -->
+            <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Business Clients</h3>
+                        <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mt-1" id="wholesale-sales-value">KSh {{ wholesale_sales_today | default(0) | round(2) }}</p>
+                        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400" id="wholesale-orders-info">
+                            {{ wholesale_open_orders }} open, {{ wholesale_closed_orders }} closed
+                        </div>
+                    </div>
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Stats Column -->
+    <div class="space-y-4 sm:space-y-6">
+        <!-- Pending Debt Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border-l-4 border-yellow-500 border-t border-r border-b border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+            <div class="flex items-center justify-between">
+                <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Pending Debt</h3>
+                <div class="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+            </div>
+            <p class="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400 mt-3" id="debt-value">KSh {{ total_debt | default(0) | round(2) }}</p>
+            <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">Outstanding payments</div>
+        </div>
+
+        <!-- Expenses Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-xl shadow-md border-l-4 border-purple-500 border-t border-r border-b border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-300">
+            <div class="flex items-center justify-between">
+                <h3 class="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium">Total Expenses</h3>
+                <div class="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
+            </div>
+            <p class="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400 mt-3" id="expenses-value">KSh {{ total_expenses | default(0) | round(2) }}</p>
+            <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">Business costs</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ACTIVITY HANDLER SECTION -->
+<!-- ============================================================ -->
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden mb-6 sm:mb-8">
+    
+    <!-- HEADER -->
+    <div class="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+        <h2 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Activity Stream</h2>
+        <div class="flex gap-2">
+            <button id="export-pdf" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs sm:text-sm flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                PDF
+            </button>
+            <button id="export-docx" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs sm:text-sm flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                DOCX
+            </button>
+        </div>
+    </div>
+
+    <!-- FILTER CONTROLS -->
+    <div class="p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+            
+            <!-- Activity Type Filters (Tabs) -->
+            <div class="flex flex-wrap gap-2">
+                <button data-filter="all" class="filter-btn px-3 sm:px-4 py-1 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors">
+                    All <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs" id="count-all">0</span>
+                </button>
+                <button data-filter="pending" class="filter-btn px-3 sm:px-4 py-1 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors">
+                    Pending <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs" id="count-pending">0</span>
+                </button>
+                <button data-filter="completed" class="filter-btn px-3 sm:px-4 py-1 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors">
+                    Completed <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs" id="count-completed">0</span>
+                </button>
+                <button data-filter="expenses" class="filter-btn px-3 sm:px-4 py-1 sm:py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs sm:text-sm font-medium flex items-center transition-colors">
+                    Expenses <span class="ml-1 sm:ml-2 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs" id="count-expenses">0</span>
+                </button>
+                <button data-filter="gateway" class="filter-btn px-3 sm:px-4 py-1 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs sm:text-sm font-bold flex items-center transition-all">
+                    Gateway <span class="ml-1 bg-white bg-opacity-20 px-1.5 sm:px-2 py-0.5 rounded-full text-xs" id="count-gateway">0</span>
+                </button>
+                <button data-filter="modified" class="filter-btn px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs font-medium flex items-center">
+                    ✏️ Modified <span class="ml-1 bg-white bg-opacity-20 px-2 py-0.5 rounded-full" id="count-modified">0</span>
+                </button>
+                <button data-filter="previous" class="filter-btn px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md text-xs font-medium flex items-center">
+                    📅 Previous <span class="ml-1 bg-white bg-opacity-20 px-2 py-0.5 rounded-full" id="count-previous">0</span>
+                </button>
+            </div>
+            
+            <!-- Date Picker -->
+            <div class="flex items-center space-x-2">
+                <label for="activity-date-picker" class="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Date:</label>
+                <input type="date" id="activity-date-picker" class="py-1 sm:py-2 px-2 sm:px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm">
+                <button id="clear-date" class="px-3 py-1 sm:py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-xs sm:text-sm font-medium">
+                    Clear
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STATS BANNER (Hidden by default, shown when date picked) -->
+    <div id="stats-banner" class="hidden p-3 sm:p-4 bg-blue-50 dark:bg-blue-900 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex flex-wrap gap-2 sm:gap-3">
+            <span class="inline-block bg-green-100 dark:bg-green-900 px-3 py-1.5 rounded-lg text-green-800 dark:text-green-200 text-xs sm:text-sm font-semibold">
+                📦 <span id="stat-orders">0</span> Orders
+            </span>
+            <span class="inline-block bg-blue-100 dark:bg-blue-900 px-3 py-1.5 rounded-lg text-blue-800 dark:text-blue-200 text-xs sm:text-sm font-semibold">
+                💰 Gross: KSh <span id="stat-total">0</span>
+            </span>
+            <span class="inline-block bg-red-100 dark:bg-red-900 px-3 py-1.5 rounded-lg text-red-800 dark:text-red-200 text-xs sm:text-sm font-semibold">
+                🔴 Debt: KSh <span id="stat-debt">0</span>
+            </span>
+            <span class="inline-block bg-purple-100 dark:bg-purple-900 px-3 py-1.5 rounded-lg text-purple-800 dark:text-purple-200 text-xs sm:text-sm font-semibold">
+                🟣 Expenses: KSh <span id="stat-expenses">0</span>
+            </span>
+            <span class="inline-block bg-orange-100 dark:bg-orange-900 px-3 py-1.5 rounded-lg text-orange-800 dark:text-orange-200 text-xs sm:text-sm font-semibold">
+                ✏️ Modified: <span id="stat-modified">0</span>
+            </span>
+            <span class="inline-block bg-indigo-100 dark:bg-indigo-900 px-3 py-1.5 rounded-lg text-indigo-900 dark:text-indigo-100 text-xs sm:text-sm font-bold border-2 border-indigo-400 dark:border-indigo-600">
+                ✅ NET: KSh <span id="stat-net">0</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- ACTIVITY TABLE -->
+    <div id="table-container" class="overflow-x-auto">
+        <table id="activity-table" class="w-full min-w-[700px]">
+            <thead class="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"></th>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User / Activity</th>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Open Date</th>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Close Date</th>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount</th>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                    <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"></th>
+                </tr>
+            </thead>
+            <tbody id="activity-tbody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <!-- JS will populate rows here -->
+                <tr id="loading-row">
+                    <td colspan="8" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <div class="flex justify-center items-center">
+                            <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span class="ml-3 text-sm">Loading activities...</span>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- PAGINATION -->
+    <div id="pagination-controls" class="hidden p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
+        <button id="prev-page" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+            Previous
+        </button>
+        <span id="page-info" class="text-sm text-gray-700 dark:text-gray-300">
+            Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+        </span>
+        <button id="next-page" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+            Next
+        </button>
+    </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- EXTERNAL JAVASCRIPT FILES -->
+<!-- ============================================================ -->
+<script src="{{ url_for('static', filename='js/activity_handler.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboards.js') }}"></script>
+
+{% endblock %}

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Guardian | Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboards.css') }}">
+    </head>
+<body>
+    <nav class="sidebar">
+        <h2>Session Monitor</h2>
+        <ul>
+            <li><a href="{{ url_for('dashboards', view='app') }}">App Sessions</a></li>
+            <li><a href="{{ url_for('dashboards', view='db') }}">Database Sessions</a></li>
+        </ul>
+    </nav>
+
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+<script>
+function toggleDetails(id) {
+    const element = document.getElementById(id);
+    if (element.classList.contains('hidden')) {
+        element.classList.remove('hidden');
+    } else {
+        element.classList.add('hidden');
+    }
+}
+</script>
+</html>
