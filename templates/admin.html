@@ -18,6 +18,7 @@
             <li><a href="#" data-section="users">Users</a></li>
             <li><a href="#" data-section="security">Security</a></li>
             <li><a href="#" data-section="database">Database</a></li>
+            <li><a href="#" data-section="logs">Logs</a></li>
             <li><a href="#" id="nav-logout">Logout</a></li>
         </ul>
     </nav>
@@ -235,7 +236,7 @@
     <!-- ================================================
          SECTION: DATABASE MONITOR
     ================================================ -->
-<section id="section-database" data-section="database" hidden>
+    <section id="section-database" data-section="database" hidden>
         <main>
             <h1>Database Monitor</h1>
 
@@ -261,10 +262,12 @@
 
             <!-- Stats cards -->
             <div id="db-stats-bar">
-                <div class="db-stat-card">
-                    <span>Server Status</span>
-                    <strong id="db-stat-status">—</strong>
+
+                <!-- Server stat card — filled by JS from serverStatus + backup log -->
+                <div class="db-stat-card db-stat-card--server" id="db-server-stat-card">
+                    <span class="db-stat-placeholder">Connect to load server info</span>
                 </div>
+
                 <div class="db-stat-card">
                     <span>PID</span>
                     <strong id="db-stat-pid">—</strong>
@@ -384,6 +387,163 @@
                         <div id="db-console-placeholder">Select a command and press Run.</div>
                     </div>
                 </div>
+            </div>
+
+        </main>
+    </section>
+
+    <!-- ================================================
+         SECTION: LOGS
+    ================================================ -->
+    <section id="section-logs" data-section="logs" hidden>
+        <main>
+            <h1>Logs</h1>
+
+            <!-- Sub-tab bar -->
+            <div id="logs-tab-bar">
+                <button class="logs-tab active" data-tab="auth">DB Auth Events</button>
+                <button class="logs-tab" data-tab="lifecycle">DB Lifecycle</button>
+                <button class="logs-tab" data-tab="app">App Logs</button>
+            </div>
+
+            <!-- DB AUTH EVENTS -->
+            <div id="logs-pane-auth" class="logs-pane">
+                <div class="logs-filters">
+                    <div class="logs-filter-group">
+                        <label for="laf-from">From</label>
+                        <input type="date" id="laf-from">
+                    </div>
+                    <div class="logs-filter-group">
+                        <label for="laf-to">To</label>
+                        <input type="date" id="laf-to">
+                    </div>
+                    <div class="logs-filter-group">
+                        <label for="laf-type">Type</label>
+                        <select id="laf-type">
+                            <option value="all">All</option>
+                            <option value="app">App</option>
+                            <option value="success">Direct OK</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div class="logs-filter-group logs-filter-group--search">
+                        <label for="laf-search">Search</label>
+                        <input type="text" id="laf-search" placeholder="user, IP…">
+                    </div>
+                    <button id="laf-run">Filter</button>
+                    <button id="laf-clear" class="logs-btn-clear">Clear</button>
+                </div>
+                <div class="logs-meta">
+                    <span><span id="laf-count">—</span> events</span>
+                    <span id="laf-pagination" class="logs-pagination"></span>
+                </div>
+                <div class="db-table-scroll">
+                    <table id="laf-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>DB User</th>
+                                <th>App User</th>
+                                <th>IP</th>
+                                <th>Client</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="laf-body"></tbody>
+                    </table>
+                </div>
+                <div id="laf-empty"   hidden>No events found.</div>
+                <div id="laf-loading" hidden>Loading…</div>
+            </div>
+
+            <!-- DB LIFECYCLE -->
+            <div id="logs-pane-lifecycle" class="logs-pane" hidden>
+                <div class="logs-filters">
+                    <div class="logs-filter-group">
+                        <label for="llf-from">From</label>
+                        <input type="date" id="llf-from">
+                    </div>
+                    <div class="logs-filter-group">
+                        <label for="llf-to">To</label>
+                        <input type="date" id="llf-to">
+                    </div>
+                    <button id="llf-run">Filter</button>
+                    <button id="llf-clear" class="logs-btn-clear">Clear</button>
+                </div>
+                <div class="logs-meta">
+                    <span><span id="llf-count">—</span> events</span>
+                    <span id="llf-pagination" class="logs-pagination"></span>
+                </div>
+                <div class="db-table-scroll">
+                    <table id="llf-table">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>PID</th>
+                                <th>Port</th>
+                                <th>Host</th>
+                                <th>UID</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="llf-body"></tbody>
+                    </table>
+                </div>
+                <div id="llf-empty"   hidden>No lifecycle events found.</div>
+                <div id="llf-loading" hidden>Loading…</div>
+            </div>
+
+            <!-- APP LOGS -->
+            <div id="logs-pane-app" class="logs-pane" hidden>
+                <div class="logs-filters">
+                    <div class="logs-filter-group">
+                        <label for="lapp-from">From</label>
+                        <input type="date" id="lapp-from">
+                    </div>
+                    <div class="logs-filter-group">
+                        <label for="lapp-to">To</label>
+                        <input type="date" id="lapp-to">
+                    </div>
+                    <div class="logs-filter-group">
+                        <label for="lapp-action">Action</label>
+                        <select id="lapp-action">
+                            <option value="all">All</option>
+                            <option value="login_success">Login Success</option>
+                            <option value="login_failed">Login Failed</option>
+                            <option value="logout">Logout</option>
+                            <option value="signup">Signup</option>
+                            <option value="password_reset_request">Password Reset</option>
+                            <option value="account_approved">Account Approved</option>
+                            <option value="role_changed">Role Changed</option>
+                        </select>
+                    </div>
+                    <div class="logs-filter-group logs-filter-group--search">
+                        <label for="lapp-search">Search</label>
+                        <input type="text" id="lapp-search" placeholder="email, IP…">
+                    </div>
+                    <button id="lapp-run">Filter</button>
+                    <button id="lapp-clear" class="logs-btn-clear">Clear</button>
+                </div>
+                <div class="logs-meta">
+                    <span><span id="lapp-count">—</span> events</span>
+                    <span id="lapp-pagination" class="logs-pagination"></span>
+                </div>
+                <div class="db-table-scroll">
+                    <table id="lapp-table">
+                        <thead>
+                            <tr>
+                                <th>Action</th>
+                                <th>Email</th>
+                                <th>IP</th>
+                                <th>Reason</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lapp-body"></tbody>
+                    </table>
+                </div>
+                <div id="lapp-empty"   hidden>No app logs found.</div>
+                <div id="lapp-loading" hidden>Loading…</div>
             </div>
 
         </main>

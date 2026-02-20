@@ -305,13 +305,98 @@ def is_mongod_running():
         return False
 
 
+
+# ============================================================================
+# SESSION CONFIGURATION
 # ============================================================================
 
+# Set session lifetime to 6 hours
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=6)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
+# Force logout flag
+FORCE_LOGOUT_FLAG_FILE = 'force_logout.lock'
+
+def is_force_logout_active():
+    """Check if admin has triggered force logout for all users"""
+    return os.path.exists(FORCE_LOGOUT_FLAG_FILE)
+
+def trigger_force_logout():
+    """Admin function: Create flag to force all user to logout"""
+    with open(FORCE_LOGOUT_FLAG_FILE, 'w') as f:
+        f.write(str(datetime.now()))
+
+def clear_force_logout():
+    """Admin function: Remove force logout flag"""
+    if os.path.exists(FORCE_LOGOUT_FLAG_FILE):
+        os.remove(FORCE_LOGOUT_FLAG_FILE)
 # ════════════════════════════════════════════════════════════
 # AUDIT & SESSION TRACKING
 # ════════════════════════════════════════════════════════════
-
+@app.before_request
+def track_user_activity():
+    """
+    Track user activity and check session validity
+    - Updates last_activity timestamp on every request
+    - Checks if session expired (6 hours of inactivity)
+    - Checks if admin triggered force logout
+    """
+    # Skip for static files, auth, and splash pages
+    if request.endpoint and request.endpoint in ['static', 'auth', '/']:
+        return
+    
+    # Check if user is logged in
+    if 'user' not in session:
+        return redirect(url_for('auth'))
+    
+    # === CHECK 1: Force Logout Flag ===
+    if is_force_logout_active():
+        user_email = session.get('user', {}).get('email', 'unknown')
+        
+        # Log forced logout
+        db['session_logs'].insert_one({
+            'email': user_email,
+            'action': 'forced_logout',
+            'reason': 'admin_triggered',
+            'timestamp': datetime.now(NAIROBI_TZ),
+            'ip_address': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent')
+        })
+        
+        session.clear()
+        flash('Your session has been terminated. Please log in again.', 'warnings')
+        return redirect(url_for('auth'))
+    
+    # === CHECK 2: Session Expiry (6 hours inactivity) ===
+    now = datetime.now(NAIROBI_TZ)
+    last_activity = session.get('last_activity')
+    
+    if last_activity:
+        if isinstance(last_activity, str):
+            last_activity = datetime.fromisoformat(last_activity)
+        
+        time_elapsed = now - last_activity
+        if time_elapsed > timedelta(hours=6):
+            user_email = session.get('user', {}).get('email', 'unknown')
+            
+            # Log session expiry
+            db['session_logs'].insert_one({
+                'email': user_email,
+                'action': 'session_expired',
+                'reason': 'inactivity_6_hours',
+                'last_activity': last_activity,
+                'timestamp': now,
+                'ip_address': request.remote_addr,
+                'user_agent': request.headers.get('User-Agent')
+            })
+            
+            session.clear()
+            flash('Your session expired due to inactivity. Please log in again.', 'info')
+            return redirect(url_for('auth', next=request.url))
+    
+    # === UPDATE: Store current activity time ===
+    session['last_activity'] = now.isoformat()
+    session.permanent = True
 
 # ============================================================
 # HELPER FUNCTIONS

@@ -955,3 +955,399 @@ tr td:first-child { font-weight: 500; }
     flex-direction: column;
     gap: 0;
 }
+/* ── Auth log — client column added ─────────────────────────────────────── */
+
+/* Updated grid: badge | user | ip | client | time */
+.auth-entry {
+    display: grid;
+    grid-template-columns: 64px 1fr 1fr 72px 130px;
+    align-items: center;
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 12px;
+}
+
+.auth-entry:last-child { border-bottom: none; }
+.auth-entry:hover { background: var(--surface-2); }
+
+.auth-client {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 2px 5px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    justify-self: start;
+    white-space: nowrap;
+}
+
+/* Client badge variants */
+.client-app     { background: rgba(240,165,0,0.10);   color: var(--accent);    border: 1px solid rgba(240,165,0,0.2);   }
+.client-shell   { background: rgba(224,68,68,0.10);   color: var(--danger);    border: 1px solid rgba(224,68,68,0.2);   }
+.client-compass { background: rgba(153,153,153,0.08); color: var(--text-dim);  border: 1px solid rgba(153,153,153,0.15); }
+.client-direct  { background: transparent;            color: var(--text-muted);border: 1px solid var(--border);          }
+
+/* ── Session table — type badge variants ─────────────────────────────────── */
+
+.badge-app     { background: rgba(240,165,0,0.12);  color: var(--accent);   }
+.badge-shell   { background: rgba(224,68,68,0.12);  color: var(--danger);   }
+.badge-compass { background: rgba(153,153,153,0.10);color: var(--text-dim); }
+.badge-direct  { background: transparent;           color: var(--text-muted);border: 1px solid var(--border); }
+
+/* ── Server stat card content ────────────────────────────────────────────── */
+
+.srv-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 11px;
+}
+
+.srv-stat-row:last-child { border-bottom: none; }
+
+.srv-stat-row--path {
+    display: block;
+    padding: 2px 0 6px;
+    border-bottom: none;
+}
+
+.srv-stat-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.srv-stat-val {
+    color: var(--text);
+    font-size: 11px;
+    text-align: right;
+}
+
+.srv-stat-path {
+    color: var(--text-muted);
+    font-size: 10px;
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+.srv-stat-divider {
+    border-top: 1px solid var(--border);
+    margin: 6px 0;
+}
+
+.db-stat-placeholder {
+    color: var(--text-muted);
+    font-size: 20px;
+}
+/* ============================================================================
+   LOGS SECTION — append to admin.css
+   ============================================================================ */
+
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+
+#logs-tab-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+}
+
+.logs-tab {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 18px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    position: relative;
+    bottom: -1px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.logs-tab:hover {
+    color: var(--text);
+    border-color: var(--border);
+    background: var(--surface);
+}
+
+.logs-tab.active {
+    color: var(--text);
+    background: var(--surface);
+    border-color: var(--border);
+    border-bottom-color: var(--surface); /* merges into pane */
+}
+
+/* ── Panes ───────────────────────────────────────────────────────────────── */
+
+.logs-pane {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 var(--radius) var(--radius) var(--radius);
+    padding: 20px;
+}
+
+/* ── Filters row ─────────────────────────────────────────────────────────── */
+
+.logs-filters {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.logs-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.logs-filter-group label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.logs-filter-group input,
+.logs-filter-group select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 11px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 130px;
+}
+
+.logs-filter-group input:focus,
+.logs-filter-group select:focus {
+    border-color: var(--accent);
+}
+
+.logs-filter-group--search input {
+    min-width: 200px;
+}
+
+.logs-filters > button {
+    align-self: flex-end;
+}
+
+#laf-run, #llf-run, #lapp-run {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 500;
+    padding: 7px 18px;
+}
+
+#laf-run:hover, #llf-run:hover, #lapp-run:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+    color: #000;
+}
+
+.logs-btn-clear {
+    align-self: flex-end;
+    color: var(--text-muted);
+    padding: 7px 14px;
+}
+
+.logs-btn-clear:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+/* ── Meta row (count + pagination) ──────────────────────────────────────── */
+
+.logs-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.logs-pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logs-page-btn {
+    font-size: 11px;
+    padding: 3px 10px;
+    border: 1px solid var(--border-light);
+    color: var(--text-muted);
+    background: transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.logs-page-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.logs-page-indicator {
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+}
+
+/* ── Empty / loading states ─────────────────────────────────────────────── */
+
+#laf-empty,  #laf-loading,
+#llf-empty,  #llf-loading,
+#lapp-empty, #lapp-loading {
+    padding: 32px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+}
+
+/* ── Server stat card override ───────────────────────────────────────────── */
+/* The card now holds dynamic content from JS instead of a single strong tag */
+
+.db-stat-card--server {
+    grid-column: span 2; /* wider — it has more content than a single number */
+    padding: 14px 18px;
+}
+
+@media (max-width: 1200px) {
+    .db-stat-card--server {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 768px) {
+    .db-stat-card--server {
+        grid-column: span 2;
+    }
+}
+
+/* ── Auth log — client column added ─────────────────────────────────────── */
+
+/* Updated grid: badge | user | ip | client | time */
+.auth-entry {
+    display: grid;
+    grid-template-columns: 64px 1fr 1fr 72px 130px;
+    align-items: center;
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 12px;
+}
+
+.auth-entry:last-child { border-bottom: none; }
+.auth-entry:hover { background: var(--surface-2); }
+
+.auth-client {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 2px 5px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    justify-self: start;
+    white-space: nowrap;
+}
+
+/* Client badge variants */
+.client-app     { background: rgba(240,165,0,0.10);   color: var(--accent);    border: 1px solid rgba(240,165,0,0.2);   }
+.client-shell   { background: rgba(224,68,68,0.10);   color: var(--danger);    border: 1px solid rgba(224,68,68,0.2);   }
+.client-compass { background: rgba(153,153,153,0.08); color: var(--text-dim);  border: 1px solid rgba(153,153,153,0.15); }
+.client-direct  { background: transparent;            color: var(--text-muted);border: 1px solid var(--border);          }
+
+/* ── Session table — type badge variants ─────────────────────────────────── */
+
+.badge-app     { background: rgba(240,165,0,0.12);  color: var(--accent);   }
+.badge-shell   { background: rgba(224,68,68,0.12);  color: var(--danger);   }
+.badge-compass { background: rgba(153,153,153,0.10);color: var(--text-dim); }
+.badge-direct  { background: transparent;           color: var(--text-muted);border: 1px solid var(--border); }
+
+/* ── Server stat card content ────────────────────────────────────────────── */
+
+.srv-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 11px;
+}
+
+.srv-stat-row:last-child { border-bottom: none; }
+
+.srv-stat-row--path {
+    display: block;
+    padding: 2px 0 6px;
+    border-bottom: none;
+}
+
+.srv-stat-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.srv-stat-val {
+    color: var(--text);
+    font-size: 11px;
+    text-align: right;
+}
+
+.srv-stat-path {
+    color: var(--text-muted);
+    font-size: 10px;
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+.srv-stat-divider {
+    border-top: 1px solid var(--border);
+    margin: 6px 0;
+}
+
+.db-stat-placeholder {
+    color: var(--text-muted);
+    font-size: 20px;
+}
+
+/* Logout badge */
+.auth-badge.logout {
+    background: rgba(153,153,153,0.10);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+}
+
+/* client-internal badge */
+.client-internal {
+    background: rgba(153,153,153,0.08);
+    color: var(--text-dim);
+    border: 1px solid rgba(153,153,153,0.15);
+}
