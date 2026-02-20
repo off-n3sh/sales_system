@@ -17,6 +17,7 @@
             <li><a href="#" data-section="overview">Overview</a></li>
             <li><a href="#" data-section="users">Users</a></li>
             <li><a href="#" data-section="security">Security</a></li>
+            <li><a href="#" data-section="database">Database</a></li>
             <li><a href="#" id="nav-logout">Logout</a></li>
         </ul>
     </nav>
@@ -66,13 +67,11 @@
         <main>
             <h1>All Users</h1>
 
-            <!-- Search -->
             <div id="users-search-bar">
                 <input type="text" id="users-search-input" placeholder="Search by name or email...">
                 <button id="users-search-btn">Search</button>
             </div>
 
-            <!-- Status filter tabs -->
             <div id="users-filter-bar">
                 <button class="filter-btn active" data-status="all">All</button>
                 <button class="filter-btn" data-status="pending">Pending Approval</button>
@@ -107,7 +106,6 @@
             <button id="btn-back-to-users">← Back to Users</button>
             <h1 id="detail-user-name">—</h1>
 
-            <!-- User info grid -->
             <div id="detail-user-info">
                 <p><strong>Email</strong><span id="detail-email">—</span></p>
                 <p><strong>Phone</strong><span id="detail-phone">—</span></p>
@@ -117,7 +115,6 @@
                 <p><strong>Last Login</strong><span id="detail-last-login">—</span></p>
             </div>
 
-            <!-- Admin actions -->
             <div id="detail-admin-actions">
                 <h2>Actions</h2>
                 <button id="btn-detail-approve">Approve</button>
@@ -136,7 +133,6 @@
                 </div>
             </div>
 
-            <!-- Session & activity logs -->
             <div id="detail-logs">
                 <h2>Session &amp; Activity History</h2>
                 <table id="detail-logs-table">
@@ -168,13 +164,10 @@
 
             <form id="reset-password-form">
                 <input type="hidden" id="reset-user-id">
-
                 <label for="reset-new-password">New Password</label>
                 <input type="password" id="reset-new-password" required>
-
                 <label for="reset-confirm-password">Confirm Password</label>
                 <input type="password" id="reset-confirm-password" required>
-
                 <button type="submit">Reset Password</button>
             </form>
         </main>
@@ -186,18 +179,14 @@
     <section id="section-security" data-section="security" hidden>
         <main>
             <h1>Suspicious Activity</h1>
-            <p style="color: var(--text-muted); font-size:12px; margin-bottom:20px;">
-                All failed login attempts — wrong passwords, unknown emails, blocked accounts.
-            </p>
+            <p class="section-sub">All failed login attempts — wrong passwords, unknown emails, blocked accounts.</p>
 
-            <!-- Quick filters -->
             <div id="security-quick-filters">
                 <button class="quick-btn" data-quick="today">Today</button>
                 <button class="quick-btn" data-quick="yesterday">Yesterday</button>
                 <button class="quick-btn" data-quick="week">Last 7 Days</button>
             </div>
 
-            <!-- Manual filters -->
             <div id="security-filters">
                 <div>
                     <label for="security-date-from">From</label>
@@ -243,6 +232,164 @@
         </main>
     </section>
 
+    <!-- ================================================
+         SECTION: DATABASE MONITOR
+    ================================================ -->
+<section id="section-database" data-section="database" hidden>
+        <main>
+            <h1>Database Monitor</h1>
+
+            <!-- Connection bar -->
+            <div id="db-connection-panel">
+                <div id="db-connection-fields">
+                    <div class="db-field">
+                        <label for="db-hostname">Host</label>
+                        <input type="text" id="db-hostname" value="localhost" placeholder="hostname or IP">
+                    </div>
+                    <div class="db-field db-field-sm">
+                        <label for="db-port">Port</label>
+                        <input type="text" id="db-port" value="27017">
+                    </div>
+                    <button id="db-connect-btn">Connect</button>
+                </div>
+                <div id="db-ws-status">
+                    <span class="db-ws-dot" id="db-ws-dot"></span>
+                    <span id="db-ws-label">Disconnected</span>
+                    <span id="db-offline-tag" class="db-offline-tag" hidden>● OFFLINE</span>
+                </div>
+            </div>
+
+            <!-- Stats cards -->
+            <div id="db-stats-bar">
+                <div class="db-stat-card">
+                    <span>Server Status</span>
+                    <strong id="db-stat-status">—</strong>
+                </div>
+                <div class="db-stat-card">
+                    <span>PID</span>
+                    <strong id="db-stat-pid">—</strong>
+                </div>
+                <div class="db-stat-card">
+                    <span>Port</span>
+                    <strong id="db-stat-port">—</strong>
+                </div>
+                <div class="db-stat-card">
+                    <span>Active Connections</span>
+                    <strong id="db-stat-active">0</strong>
+                </div>
+                <div class="db-stat-card">
+                    <span>Logins Today</span>
+                    <strong id="db-stat-logins">0</strong>
+                </div>
+                <div class="db-stat-card db-stat-card--warn">
+                    <span>Failed Auths</span>
+                    <strong id="db-stat-failed">0</strong>
+                </div>
+                <div class="db-stat-card">
+                    <span>Restarts</span>
+                    <strong id="db-stat-restarts">0</strong>
+                </div>
+            </div>
+
+            <!-- Live Sessions -->
+            <div class="db-window">
+                <div class="db-window-header">
+                    <h2>Active Sessions</h2>
+                    <span class="db-window-badge" id="db-session-count">0</span>
+                </div>
+                <div class="db-window-controls">
+                    <input type="search" id="db-session-search" placeholder="Search user or IP...">
+                </div>
+                <div class="db-table-scroll">
+                    <table id="db-sessions-table">
+                        <thead>
+                            <tr>
+                                <th>DB User</th>
+                                <th>App User</th>
+                                <th>IP</th>
+                                <th>Connected</th>
+                                <th>App</th>
+                                <th>Type</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="db-sessions-body"></tbody>
+                    </table>
+                </div>
+                <div id="db-sessions-empty" hidden>No active sessions.</div>
+            </div>
+
+            <!-- Auth Event Log -->
+            <div class="db-window">
+                <div class="db-window-header">
+                    <h2>Authentication Log</h2>
+                    <span class="db-window-badge" id="db-auth-count">0</span>
+                </div>
+                <div class="db-window-controls">
+                    <input type="search" id="db-auth-search" placeholder="Search...">
+                    <select id="db-auth-filter">
+                        <option value="all">All</option>
+                        <option value="success">Success</option>
+                        <option value="failed">Failed</option>
+                        <option value="app">App Users</option>
+                        <option value="direct">Direct Connections</option>
+                    </select>
+                </div>
+                <div class="db-scroll-area" id="db-auth-log"></div>
+                <div id="db-auth-empty" hidden>No auth events yet.</div>
+            </div>
+
+            <!-- Server Lifecycle -->
+            <div class="db-window">
+                <div class="db-window-header">
+                    <h2>Server Lifecycle</h2>
+                    <span class="db-window-badge" id="db-lifecycle-count">0</span>
+                </div>
+                <div class="db-scroll-area" id="db-lifecycle-log"></div>
+                <div id="db-lifecycle-empty">Watching for events...</div>
+            </div>
+
+            <!-- DB Console -->
+            <div class="db-window">
+                <div class="db-window-header">
+                    <h2>DB Console</h2>
+                    <span class="db-console-warning">⚠ Whitelisted commands only</span>
+                </div>
+                <div id="db-console-body">
+                    <div id="db-console-controls">
+                        <div class="db-console-row">
+                            <select id="db-console-cmd">
+                                <option value="">— Select command —</option>
+                                <optgroup label="Server">
+                                    <option value="serverStatus">serverStatus — server metrics</option>
+                                    <option value="currentOp">currentOp — running operations</option>
+                                    <option value="listDatabases">listDatabases — all databases</option>
+                                </optgroup>
+                                <optgroup label="Sessions">
+                                    <option value="listSessions">listSessions — active sessions</option>
+                                    <option value="killSession">killSession — kill a session (enter ID below)</option>
+                                </optgroup>
+                                <optgroup label="Users">
+                                    <option value="listUsers">listUsers — all DB users</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="db-console-row">
+                            <input type="text" id="db-console-arg" placeholder="Session ID (for killSession only)">
+                            <button id="db-console-run">Run</button>
+                            <button id="db-console-clear">Clear</button>
+                        </div>
+                    </div>
+                    <div id="db-console-output">
+                        <div id="db-console-placeholder">Select a command and press Run.</div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </section>
+
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

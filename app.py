@@ -306,39 +306,11 @@ def is_mongod_running():
 
 
 # ============================================================================
-# SESSION CONFIGURATION
-# ============================================================================
 
-# Set session lifetime to 6 hours
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=6)
-app.config['SESSION_REFRESH_EACH_REQUEST'] = True
-
-# Force logout flag
-FORCE_LOGOUT_FLAG_FILE = 'force_logout.lock'
-
-def is_force_logout_active():
-    """Check if admin has triggered force logout for all users"""
-    return os.path.exists(FORCE_LOGOUT_FLAG_FILE)
-
-def trigger_force_logout():
-    """Admin function: Create flag to force all users to logout"""
-    with open(FORCE_LOGOUT_FLAG_FILE, 'w') as f:
-        f.write(str(datetime.now()))
-
-def clear_force_logout():
-    """Admin function: Remove force logout flag"""
-    if os.path.exists(FORCE_LOGOUT_FLAG_FILE):
-        os.remove(FORCE_LOGOUT_FLAG_FILE)
 
 # ════════════════════════════════════════════════════════════
 # AUDIT & SESSION TRACKING
 # ════════════════════════════════════════════════════════════
-
-from admin_routes import admin_bp, register_activity_tracker
-app.register_blueprint(admin_bp)
-register_activity_tracker(app)
-db['session_logs'].create_index([("email", 1), ("timestamp", -1)])
-db['session_logs'].create_index([("action", 1), ("timestamp", -1)])
 
 
 # ============================================================
@@ -1945,13 +1917,6 @@ def auth():
 # ============================================================================
 # ADMIN: View Session Logs
 # ============================================================================
-@app.route('/admin')
-def admin_panel():
-    if 'user' not in session:
-        return redirect(url_for('auth'))
-    if session['user'].get('role') not in ['admin', 'manager']:
-        return redirect(url_for('dashboard'))
-    return render_template('admin.html')
 
 def get_current_user():
     """
