@@ -1,0 +1,59 @@
+/* Body */
+body.dark {
+    background-color: #1f2937; /* Dark mode background */
+    color: #ffffff; /* White text in dark mode */
+}
+
+/* Header */
+header {
+    background-color: #1e3a8a; /* Dribbble dark blue */
+}
+
+/* Shadow hover effect */
+.shadow-hover:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Sidebar */
+#sidebar {
+    position: fixed; /* Fixed to stay on the left */
+    top: 0;
+    left: 0;
+    width: 16rem; /* Matches w-64 */
+    height: 100%;
+    transform: translateX(-100%); /* Hidden by default */
+    transition: transform 0.3s ease-in-out; /* Smooth slide */
+    z-index: 30; /* Above main content */
+}
+
+/* Sidebar visible state */
+#sidebar.show {
+    transform: translateX(0); /* Slide in */
+}
+
+/* Main Content */
+#main-content {
+    width: 100%; /* Full width when sidebar is hidden */
+    margin-left: 0; /* No left gap */
+    transition: margin-left 0.3s ease-in-out; /* Smooth shift */
+    box-sizing: border-box; /* Include padding in width */
+}
+
+/* Main Content when sidebar is open */
+#main-content.sidebar-open {
+    margin-left: 16rem; /* Shift right by sidebar width */
+    width: calc(100% - 16rem); /* Adjust width */
+}
+
+/* Ensure body and html take full height */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* Flex container */
+.flex.h-screen {
+    display: flex;
+    min-height: 100vh; /* Full viewport height */
+}

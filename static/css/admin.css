@@ -1,0 +1,1314 @@
+/* ============================================================================
+   ADMIN.CSS — Dreamland Admin Dashboard
+   Aesthetic: Dark industrial — monochrome base, sharp amber accent
+   Font: DM Mono (monospace character) + Syne (display)
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap');
+
+/* ============================================================================
+   VARIABLES
+   ============================================================================ */
+
+:root {
+    --bg:          #0d0d0d;
+    --surface:     #141414;
+    --surface-2:   #1c1c1c;
+    --border:      #2a2a2a;
+    --border-light:#333333;
+    --text:        #e8e8e8;
+    --text-muted:  #666666;
+    --text-dim:    #999999;
+    --accent:      #f0a500;
+    --accent-dim:  #b87c00;
+    --danger:      #e04444;
+    --success:     #3dba7a;
+    --warning:     #e09244;
+    --radius:      4px;
+    --font-mono:   'DM Mono', monospace;
+    --font-display:'Syne', sans-serif;
+}
+
+/* ============================================================================
+   RESET & BASE
+   ============================================================================ */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* ============================================================================
+   LAYOUT
+   ============================================================================ */
+
+body {
+    display: grid;
+    grid-template-rows: 52px 1fr;
+    min-height: 100vh;
+}
+
+main {
+    padding: 32px 40px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   NAV
+   ============================================================================ */
+
+#admin-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+#admin-nav > span {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+#admin-nav ul {
+    display: flex;
+    gap: 4px;
+    list-style: none;
+}
+
+#admin-nav ul li a {
+    display: block;
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    transition: color 0.15s, border-color 0.15s;
+}
+
+#admin-nav ul li a:hover,
+#admin-nav ul li a.active {
+    color: var(--text);
+    border-color: var(--border-light);
+    text-decoration: none;
+}
+
+#nav-logout {
+    color: var(--danger) !important;
+}
+
+#nav-logout:hover {
+    border-color: var(--danger) !important;
+}
+
+/* ============================================================================
+   TOAST
+   ============================================================================ */
+
+#toast {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-light);
+    border-left: 3px solid var(--success);
+    padding: 12px 20px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text);
+    z-index: 999;
+    animation: slideUp 0.2s ease;
+    max-width: 360px;
+}
+
+#toast[data-type="error"] {
+    border-left-color: var(--danger);
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   HEADINGS
+   ============================================================================ */
+
+h1 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 24px;
+    letter-spacing: -0.01em;
+}
+
+h2 {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* ============================================================================
+   STATS BAR
+   ============================================================================ */
+
+#stats-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+}
+
+#stats-bar > div {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s;
+}
+
+#stats-bar > div:hover {
+    border-color: var(--border-light);
+}
+
+#stats-bar span {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+#stats-bar strong {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+}
+
+/* ============================================================================
+   SEARCH BAR
+   ============================================================================ */
+
+#users-search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+#users-search-input {
+    flex: 1;
+    max-width: 360px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+#users-search-input:focus {
+    border-color: var(--accent);
+}
+
+#users-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* ============================================================================
+   TABLES
+   ============================================================================ */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+thead tr {
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+}
+
+th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+td {
+    padding: 11px 16px;
+    font-size: 12px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+tbody tr {
+    transition: background 0.1s;
+}
+
+tbody tr:hover {
+    background: var(--surface-2);
+}
+
+/* Status badges inside td */
+td:has(> .badge) {
+    padding: 8px 16px;
+}
+
+/* ============================================================================
+   STATUS BADGES  (applied via JS if you want, or just raw text for now)
+   ============================================================================ */
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.badge-active  { background: rgba(61,186,122,0.12); color: var(--success); }
+.badge-blocked { background: rgba(224,68,68,0.12);  color: var(--danger);  }
+.badge-pending { background: rgba(240,165,0,0.12);  color: var(--accent);  }
+
+/* ============================================================================
+   BUTTONS
+   ============================================================================ */
+
+button {
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-light);
+    background: transparent;
+    color: var(--text-dim);
+    padding: 5px 12px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+button:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+}
+
+/* Primary (search, filter) */
+#users-search-btn,
+#security-filter-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 500;
+}
+
+#users-search-btn:hover,
+#security-filter-btn:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+    color: #000;
+}
+
+/* Danger buttons */
+.btn-block-user,
+#btn-detail-block,
+#btn-detail-force-logout {
+    border-color: rgba(224,68,68,0.4);
+    color: var(--danger);
+}
+
+.btn-block-user:hover,
+#btn-detail-block:hover,
+#btn-detail-force-logout:hover {
+    background: rgba(224,68,68,0.08);
+    border-color: var(--danger);
+}
+
+/* Success / unblock */
+.btn-unblock-user {
+    border-color: rgba(61,186,122,0.4);
+    color: var(--success);
+}
+
+.btn-unblock-user:hover {
+    background: rgba(61,186,122,0.08);
+    border-color: var(--success);
+}
+
+/* View */
+.btn-view-user {
+    border-color: rgba(240,165,0,0.3);
+    color: var(--accent);
+}
+
+.btn-view-user:hover {
+    background: rgba(240,165,0,0.08);
+    border-color: var(--accent);
+}
+
+/* Reset PW */
+.btn-reset-pw {
+    color: var(--text-muted);
+}
+
+/* Clear */
+#security-clear-btn {
+    color: var(--text-muted);
+}
+
+/* Submit reset */
+#reset-password-form button[type="submit"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    padding: 9px 20px;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+#reset-password-form button[type="submit"]:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+}
+
+/* Back buttons */
+#btn-back-to-users,
+#btn-back-from-reset {
+    margin-bottom: 24px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-color: transparent;
+    padding-left: 0;
+}
+
+#btn-back-to-users:hover,
+#btn-back-from-reset:hover {
+    color: var(--text);
+    border-color: transparent;
+    background: transparent;
+}
+
+/* ============================================================================
+   USER DETAIL
+   ============================================================================ */
+
+#detail-user-info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+#detail-user-info p {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#detail-user-info strong {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+#detail-user-info span {
+    font-size: 13px;
+    color: var(--text);
+}
+
+#detail-admin-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 32px;
+    padding: 16px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+#detail-admin-actions h2 {
+    margin-bottom: 0;
+    margin-right: 16px;
+    white-space: nowrap;
+}
+
+/* ============================================================================
+   RESET PASSWORD FORM
+   ============================================================================ */
+
+#reset-password-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#section-reset-password > p {
+    margin-bottom: 20px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+#section-reset-password > p strong {
+    color: var(--text);
+}
+
+label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+input[type="password"],
+input[type="text"],
+input[type="date"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 14px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+input[type="password"]:focus,
+input[type="text"]:focus,
+input[type="date"]:focus {
+    border-color: var(--accent);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.5);
+}
+
+/* ============================================================================
+   SECURITY FILTERS
+   ============================================================================ */
+
+#security-filters {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+#security-filters label {
+    display: block;
+    margin-bottom: 4px;
+}
+
+#security-filters > div,
+#security-filters label + input {
+    display: flex;
+    flex-direction: column;
+}
+
+#security-filters input {
+    width: auto;
+    min-width: 160px;
+}
+
+/* ============================================================================
+   EMPTY & LOADING STATES
+   ============================================================================ */
+
+#users-empty,
+#users-loading,
+#detail-logs-empty,
+#detail-logs-loading,
+#security-empty,
+#security-loading {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 8px;
+}
+
+/* ============================================================================
+   ACTION LOG COLORING
+   ============================================================================ */
+
+/* Color-code action cells in log tables */
+tr td:first-child {
+    font-weight: 500;
+}
+
+/* We color via data attribute set by JS, or just target text content via CSS trick */
+[data-action="login_success"]  { color: var(--success); }
+[data-action="login_failed"]   { color: var(--danger);  }
+[data-action="logout"]         { color: var(--text-dim);}
+[data-action="forced_logout"]  { color: var(--warning); }
+[data-action="session_expired"]{ color: var(--warning); }
+[data-action="password_reset"] { color: var(--accent);  }
+[data-action="signup"]         { color: var(--success); }
+
+/* ============================================================================
+   SCROLLBAR
+   ============================================================================ */
+
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================================================
+   RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 1100px) {
+    #stats-bar {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    main {
+        padding: 20px 16px;
+    }
+
+    #admin-nav {
+        padding: 0 16px;
+    }
+
+    #stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    #detail-user-info {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    table {
+        display: block;
+        overflow-x: auto;
+    }
+
+    #detail-admin-actions {
+        flex-wrap: wrap;
+    }
+}
+/* ============================================================================
+   ADD TO admin.css
+   ============================================================================ */
+
+/* Users filter bar */
+#users-filter-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.filter-btn {
+    font-size: 11px;
+    padding: 5px 14px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+}
+
+/* Security quick filters */
+#security-quick-filters {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+}
+
+.quick-btn {
+    font-size: 11px;
+    padding: 5px 14px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.quick-btn:hover,
+.quick-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(240,165,0,0.08);
+}
+
+/* Security reason select */
+#security-reason {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 160px;
+}
+
+#security-reason:focus {
+    border-color: var(--accent);
+}
+
+/* Security count */
+#security-count {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-bottom: 12px;
+}
+
+/* Role selector in detail */
+#detail-role-change {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+#detail-role-change label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+#role-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+#role-select:focus {
+    border-color: var(--accent);
+}
+
+#btn-detail-change-role {
+    border-color: rgba(240,165,0,0.3);
+    color: var(--accent);
+    font-size: 11px;
+}
+
+#btn-detail-change-role:hover {
+    background: rgba(240,165,0,0.08);
+    border-color: var(--accent);
+}
+
+/* Approve button */
+.btn-approve-user {
+    border-color: rgba(61,186,122,0.4);
+    color: var(--success);
+}
+
+.btn-approve-user:hover {
+    background: rgba(61,186,122,0.08);
+    border-color: var(--success);
+}
+
+/* ============================================================================
+   ADD TO BOTTOM OF admin.css — DB Console + Lifecycle kill event
+   ============================================================================ */
+
+/* Console panel */
+#db-console-body {
+    padding: 0;
+}
+
+#db-console-controls {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+#db-console-cmd {
+    flex: 1;
+    min-width: 260px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 11px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+}
+
+#db-console-arg {
+    width: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 11px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+}
+
+#db-console-cmd:focus,
+#db-console-arg:focus { border-color: var(--accent); }
+
+#db-console-run {
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius);
+    padding: 7px 18px;
+    color: #000;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+#db-console-run:hover { background: var(--accent-dim); color: var(--text); }
+
+#db-console-clear {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 7px 14px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+#db-console-clear:hover { border-color: var(--danger); color: var(--danger); }
+
+#db-console-output {
+    background: var(--bg);
+    min-height: 180px;
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+#db-console-placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.console-line {
+    display: flex;
+    gap: 12px;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.console-line:last-child { border-bottom: none; }
+
+.console-line .cl-key  { color: var(--accent);  min-width: 160px; flex-shrink: 0; }
+.console-line .cl-val  { color: var(--text); word-break: break-all; }
+.console-line .cl-num  { color: var(--success); }
+.console-line .cl-bool { color: var(--warning); }
+.console-line .cl-null { color: var(--text-muted); font-style: italic; }
+
+.console-error {
+    color: var(--danger);
+    padding: 8px 0;
+}
+
+.console-section-header {
+    color: var(--dim);
+    font-size: 9px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 10px 0 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+
+/* Console warning label in header */
+.db-console-warning {
+    font-size: 9px;
+    letter-spacing: .08em;
+    color: var(--warning);
+    background: rgba(224,146,68,.08);
+    border: 1px solid rgba(224,146,68,.2);
+    padding: 2px 9px;
+    border-radius: 100px;
+}
+
+/* Kill session button in sessions table */
+.btn-kill-session {
+    font-size: 10px;
+    padding: 3px 10px;
+    border: 1px solid rgba(224,68,68,.3);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--danger);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-kill-session:hover {
+    background: rgba(224,68,68,.08);
+    border-color: var(--danger);
+}
+
+/* Lifecycle — killed event */
+.lc-killed {
+    background: rgba(224,68,68,.04);
+    border-left: 2px solid var(--danger);
+}
+
+.lc-killed .lc-info strong { color: var(--danger); }
+
+.lc-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ============================================================================
+   DATABASE MONITOR — additions for redesigned section
+   Append to bottom of admin.css
+   ============================================================================ */
+
+/* ── Connection panel ────────────────────────────────────────────────────── */
+
+#db-connection-panel {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+#db-connection-fields {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.db-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.db-field-sm input {
+    width: 90px;
+}
+
+#db-connect-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 500;
+    padding: 8px 18px;
+}
+
+#db-connect-btn:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim);
+}
+
+#db-ws-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.db-ws-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-light);
+    flex-shrink: 0;
+    transition: background 0.3s;
+}
+
+.db-ws-dot.connected    { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.db-ws-dot.connecting   { background: var(--accent);  box-shadow: 0 0 6px var(--accent);  }
+.db-ws-dot.disconnected { background: var(--border-light); box-shadow: none; }
+
+.db-offline-tag {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--danger);
+    background: rgba(224,68,68,0.08);
+    border: 1px solid rgba(224,68,68,0.25);
+    padding: 2px 8px;
+    border-radius: 100px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+/* ── Stats cards ─────────────────────────────────────────────────────────── */
+
+#db-stats-bar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.db-stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.15s;
+}
+
+.db-stat-card:hover {
+    border-color: var(--border-light);
+}
+
+.db-stat-card span {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.db-stat-card strong {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+}
+
+.db-stat-card--warn strong {
+    color: var(--danger);
+}
+
+@media (max-width: 1200px) {
+    #db-stats-bar { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 768px) {
+    #db-stats-bar { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Windows (shared panel style) ───────────────────────────────────────── */
+
+.db-window {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.db-window-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.db-window-header h2 {
+    margin-bottom: 0;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+}
+
+.db-window-badge {
+    font-size: 10px;
+    padding: 1px 7px;
+    background: rgba(240,165,0,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(240,165,0,0.2);
+    border-radius: 100px;
+    font-family: var(--font-mono);
+}
+
+.db-window-controls {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.db-window-controls input[type="search"] {
+    flex: 1;
+    max-width: 300px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 11px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+}
+
+.db-window-controls input[type="search"]:focus {
+    border-color: var(--accent);
+}
+
+.db-window-controls select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 11px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+}
+
+.db-window-controls select:focus {
+    border-color: var(--accent);
+}
+
+/* ── Scrollable areas (auth log, lifecycle) ──────────────────────────────── */
+
+.db-scroll-area {
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+/* ── Sessions table scroll wrapper ──────────────────────────────────────── */
+
+.db-table-scroll {
+    max-height: 340px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.db-table-scroll table {
+    border: none;
+    border-radius: 0;
+}
+
+/* ── Auth log entries ────────────────────────────────────────────────────── */
+
+.auth-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 11px;
+}
+
+.auth-entry:last-child { border-bottom: none; }
+
+.auth-entry:hover { background: var(--surface-2); }
+
+.auth-badge {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    min-width: 52px;
+    text-align: center;
+}
+
+.auth-badge.ok      { background: rgba(61,186,122,0.12); color: var(--success); }
+.auth-badge.failed  { background: rgba(224,68,68,0.12);  color: var(--danger);  }
+.auth-badge.app     { background: rgba(240,165,0,0.10);  color: var(--accent);  }
+
+.auth-user  { color: var(--text); flex: 1; }
+.auth-ip    { color: var(--text-muted); }
+.auth-time  { color: var(--text-muted); font-size: 10px; margin-left: auto; white-space: nowrap; }
+
+/* ── Lifecycle entries ───────────────────────────────────────────────────── */
+
+.lc-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-size: 11px;
+}
+
+.lc-entry:last-child { border-bottom: none; }
+
+.lc-icon {
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+.lc-entry.started  .lc-icon { color: var(--success); }
+.lc-entry.shutdown .lc-icon { color: var(--text-muted); }
+.lc-entry.restart  .lc-icon { color: var(--accent); }
+.lc-entry.killed   .lc-icon { color: var(--danger); }
+
+.lc-info { flex: 1; color: var(--text); }
+.lc-info strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.lc-entry.started  .lc-info strong { color: var(--success); }
+.lc-entry.shutdown .lc-info strong { color: var(--text-dim); }
+.lc-entry.restart  .lc-info strong { color: var(--accent);  }
+.lc-entry.killed   .lc-info strong { color: var(--danger);  }
+
+.lc-time {
+    color: var(--text-muted);
+    font-size: 10px;
+    white-space: nowrap;
+    margin-left: auto;
+}
+
+#db-lifecycle-empty {
+    padding: 20px 16px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-style: italic;
+}
+
+/* ── Console rows ────────────────────────────────────────────────────────── */
+
+.db-console-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.db-console-row:first-child {
+    margin-bottom: 8px;
+}
+
+.db-console-row select {
+    flex: 1;
+}
+
+.db-console-row input {
+    flex: 1;
+}
+
+#db-console-controls {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
