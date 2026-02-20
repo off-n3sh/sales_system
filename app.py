@@ -401,6 +401,18 @@ def track_user_activity():
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+UTC = pytz.utc
+
+def to_eat(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return UTC.localize(dt).astimezone(NAIROBI_TZ)
+    else:
+        return dt.astimezone(NAIROBI_TZ)
 
 def fetch_raw_activities(orders_collection, expenses_collection, filter_type, page, per_page):
     """Fetch activities without date filter (raw mode)"""
@@ -543,50 +555,26 @@ def format_payment_activity(order, payment, is_last, date_start):
     }
 
 
-def format_expense_simple(expense):
-    """Format expense for raw mode"""
-    user_data = expense.get('user_id', {})
-    if isinstance(user_data, dict):
-        user_name = f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}".strip()
-    else:
-        user_name = str(user_data)
-    
-    return {
-        'id': str(expense['_id']),
-        'type': 'expense',
-        'user': user_name or 'N/A',
-        'activity_text': expense.get('description', 'No description'),
-        'date': expense['date'].isoformat(),
-        'category': expense.get('category', 'General'),
-        'amount': float(expense.get('amount', 0)),
-        'status': 'completed'
-    }
-
 def format_order_for_date(order, date_start, date_end):
     """Format order as single activity with intelligent toggle logic"""
-    
-    # Fix timezone awareness
-    order_date = order['date']
-    if order_date.tzinfo is None:
-        order_date = NAIROBI_TZ.localize(order_date)
-    
+
+    # Correctly convert order date from UTC to EAT
+    order_date = to_eat(order['date'])
+
     # Determine if this is a previous order
     is_previous = order_date < date_start
-    
+
     # Get ALL payment history
     payment_history = order.get('payment_history', [])
-    
-    # Separate payments: TODAY vs BEFORE
+
+    # Separate payments: on selected date vs before
     payments_today = []
     payments_before = []
-    
+
     for p in payment_history:
-        p_date = p['date']
-        if p_date.tzinfo is None:
-            p_date = NAIROBI_TZ.localize(p_date)
-        
+        p_date = to_eat(p['date'])  # Correct UTC -> EAT conversion
+
         if date_start <= p_date <= date_end:
-            # Payment made today
             payments_today.append({
                 'time': p_date.strftime('%H:%M'),
                 'date': p_date.strftime('%d/%m/%Y'),
@@ -594,41 +582,41 @@ def format_order_for_date(order, date_start, date_end):
                 'amount': float(p['amount'])
             })
         elif p_date < date_start:
-            # Payment made before today
             payments_before.append({
                 'time': p_date.strftime('%H:%M'),
                 'date': p_date.strftime('%d/%m/%Y'),
                 'payment_type': p['payment_type'],
                 'amount': float(p['amount'])
             })
-    
+
     # Group dual payments (same timestamp)
     payments_today_grouped = group_dual_payments(payments_today)
     payments_before_grouped = group_dual_payments(payments_before)
-    
+
     # Calculate balances
     order_total = float(order.get('payment', 0)) + float(order.get('balance', 0))
-    
-    # Balance BEFORE today (for previous orders)
+
+    # Balance BEFORE selected date (for previous orders)
     balance_before_today = 0
     if is_previous:
         total_paid_before = sum(p['amount'] for p in payments_before)
         balance_before_today = order_total - total_paid_before
-    
-    # Balance AS IT WAS at end of this date
-    total_paid_by_date = sum(p['amount'] for p in payment_history 
-                             if (p['date'].replace(tzinfo=None) if p['date'].tzinfo else p['date']) <= date_end.replace(tzinfo=None))
+
+    # Balance AS IT WAS at end of this date — compare EAT-aware datetimes consistently
+    total_paid_by_date = sum(
+        p['amount'] for p in payment_history
+        if to_eat(p['date']) <= date_end
+    )
     balance_on_date = order_total - total_paid_by_date
-    
+
     # Determine if toggle is needed
     needs_toggle = (
-        len(payments_today_grouped) > 1 or  # Multiple payment events today
-        is_previous or                       # Previous order
-        'edit_tag' in order or              # Modified order
-        any(p.get('is_dual') for p in payments_today_grouped)  # Any dual payment
+        len(payments_today_grouped) > 1 or
+        is_previous or
+        'edit_tag' in order or
+        any(p.get('is_dual') for p in payments_today_grouped)
     )
-    
-    # Build activity object
+
     activity = {
         'id': order['receipt_id'],
         'timestamp': order_date.isoformat(),
@@ -637,7 +625,7 @@ def format_order_for_date(order, date_start, date_end):
         'user': order.get('salesperson_name', 'N/A'),
         'shop': order.get('shop_name', 'N/A'),
         'open_date': order_date.isoformat(),
-        'close_date': order.get('closed_date').isoformat() if order.get('closed_date') else None,
+        'close_date': to_eat(order['closed_date']).isoformat() if order.get('closed_date') else None,
         'order_type': order.get('order_type', 'retail'),
         'payment': float(order.get('payment', 0)),
         'balance': balance_on_date,
@@ -646,17 +634,13 @@ def format_order_for_date(order, date_start, date_end):
         'is_previous': is_previous,
         'is_modified': 'edit_tag' in order,
         'needs_toggle': needs_toggle,
-        
-        # Payment activity for toggle
         'payment_activity_today': payments_today_grouped,
         'payment_activity_before': payments_before_grouped,
         'balance_before_today': balance_before_today,
         'total_paid_today': sum(p.get('total_amount', p.get('amount', 0)) for p in payments_today_grouped),
-        
-        # Edit tag for modified orders
         'edit_tag': order.get('edit_tag')
     }
-    
+
     return activity
 
 
@@ -711,6 +695,24 @@ def group_dual_payments(payments):
     
     return grouped
 
+def format_expense_simple(expense):
+    """Format expense for raw mode"""
+    user_data = expense.get('user_id', {})
+    if isinstance(user_data, dict):
+        user_name = f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}".strip()
+    else:
+        user_name = str(user_data)
+    
+    return {
+        'id': str(expense['_id']),
+        'type': 'expense',
+        'user': user_name or 'N/A',
+        'activity_text': expense.get('description', 'No description'),
+        'date': expense['date'].isoformat(),
+        'category': expense.get('category', 'General'),
+        'amount': float(expense.get('amount', 0)),
+        'status': 'completed'
+    }
 
 def format_expense_detailed(expense):
     """Format expense for sorted mode"""
@@ -719,11 +721,10 @@ def format_expense_detailed(expense):
         user_name = f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}".strip()
     else:
         user_name = str(user_data)
-    
-    expense_date = expense['date']
-    if expense_date.tzinfo is None:
-        expense_date = NAIROBI_TZ.localize(expense_date)
-    
+
+    # Correct UTC -> EAT conversion
+    expense_date = to_eat(expense['date'])
+
     return {
         'id': f"expense_{expense['_id']}",
         'timestamp': expense_date.isoformat(),
@@ -737,46 +738,6 @@ def format_expense_detailed(expense):
         'status': 'completed',
         'needs_toggle': False
     }
-
-
-def calculate_stats(activities, filter_type):
-    """Calculate stats - orders only, no expenses in order count"""
-    stats = {
-        'total_orders': 0,
-        'gross_total': 0,
-        'debt': 0,
-        'expenses': 0,
-        'modified_orders': 0,
-        'net': 0
-    }
-    
-    order_ids_seen = set()
-    
-    for activity in activities:
-        if activity['type'] == 'order':
-            # Count unique orders only
-            if activity['receipt_id'] not in order_ids_seen:
-                order_ids_seen.add(activity['receipt_id'])
-                stats['total_orders'] += 1
-                
-                # Gross total = sum of all order totals (what should be collected)
-                stats['gross_total'] += activity.get('total', 0)
-                
-                # Debt = unpaid balance
-                if activity.get('balance', 0) > 0:
-                    stats['debt'] += activity['balance']
-                
-                # Modified count
-                if activity.get('is_modified'):
-                    stats['modified_orders'] += 1
-        
-        elif activity['type'] == 'expense':
-            stats['expenses'] += activity['amount']
-    
-    # NET = Money collected - Expenses = (Gross - Debt) - Expenses
-    stats['net'] = (stats['gross_total'] - stats['debt']) - stats['expenses']
-    
-    return stats
 
 
 # Update fetch_sorted_activities to use the new format_order_for_date
@@ -883,6 +844,45 @@ def fetch_sorted_activities(orders_collection, expenses_collection, filter_type,
         }
     }
 
+def calculate_stats(activities, filter_type):
+    """Calculate stats - orders only, no expenses in order count"""
+    stats = {
+        'total_orders': 0,
+        'gross_total': 0,
+        'debt': 0,
+        'expenses': 0,
+        'modified_orders': 0,
+        'net': 0
+    }
+    
+    order_ids_seen = set()
+    
+    for activity in activities:
+        if activity['type'] == 'order':
+            # Count unique orders only
+            if activity['receipt_id'] not in order_ids_seen:
+                order_ids_seen.add(activity['receipt_id'])
+                stats['total_orders'] += 1
+                
+                # Gross total = sum of all order totals (what should be collected)
+                stats['gross_total'] += activity.get('total', 0)
+                
+                # Debt = unpaid balance
+                if activity.get('balance', 0) > 0:
+                    stats['debt'] += activity['balance']
+                
+                # Modified count
+                if activity.get('is_modified'):
+                    stats['modified_orders'] += 1
+        
+        elif activity['type'] == 'expense':
+            stats['expenses'] += activity['amount']
+    
+    # NET = Money collected - Expenses = (Gross - Debt) - Expenses
+    stats['net'] = (stats['gross_total'] - stats['debt']) - stats['expenses']
+    
+    return stats
+
 
 def calculate_filter_counts(orders_collection, expenses_collection):
     """Calculate counts for filter badges"""
@@ -904,6 +904,7 @@ def calculate_filter_counts(orders_collection, expenses_collection):
             'payment_history.date': {'$gte': datetime.now(NAIROBI_TZ).replace(hour=0, minute=0, second=0)}
         })
     }
+
 
 # orders definitions
 def create_notification(order_data, notification_type='order_created'):
@@ -1947,20 +1948,7 @@ def auth():
                 current_login_time = datetime.now(NAIROBI_TZ)
                 
                 # 🆕 NEW: Update user's last_login in database
-                users_collection.update_one(
-                    {"_id": user["_id"]},
-                    {
-                        "$set": {"last_login": current_login_time},
-                        "$push": {
-                            "login_history": {
-                                "timestamp": current_login_time,
-                                "ip_address": request.remote_addr,
-                                "user_agent": request.headers.get('User-Agent')
-                            }
-                        }
-                    }
-                )
-                
+              
                 # Initialize session
                 session['user'] = {
                     "first_name": user.get("first_name"),
@@ -2362,7 +2350,7 @@ def orders():
         try:
             now = datetime.now(NAIROBI_TZ)
             shop_name = request.form.get('shop_name', 'Retail Direct')
-            salesperson_name = request.form.get('salesperson_name', 'N/A')
+            salesperson_name = f"{session['user']['first_name']} {session['user']['last_name']}"
             order_type = request.form.get('order_type', 'wholesale')
             change = float(request.form.get('change', '0') or 0)
             items_raw = request.form.getlist('items[]')
