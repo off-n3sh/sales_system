@@ -353,6 +353,37 @@ def get_users():
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
+# ============================================================
+# KICK ALL USERS — triggers global force logout via lock file
+# Call this from your admin server
+# ============================================================
+@app.route('/api/admin/kick-all-users', methods=['POST'])
+@admin_required
+def kick_all_users():
+    try:
+        trigger_force_logout()  # Creates the lock file
+        db['session_logs'].insert_one({
+            'action': 'global_force_logout',
+            'reason': 'admin_triggered_all',
+            'timestamp': datetime.now(NAIROBI_TZ),
+            'ip_address': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent')
+        })
+        return jsonify({'status': 'success', 'message': 'All users will be logged out on next request'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
+@app.route('/api/admin/clear-kick-all', methods=['POST'])
+@admin_required
+def clear_kick_all():
+    """Clear the global force logout flag so new logins are allowed again"""
+    try:
+        clear_force_logout()
+        return jsonify({'status': 'success', 'message': 'Global logout flag cleared'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
 @app.route('/api/admin/users/<user_id>')
 @admin_required
 def get_user(user_id):
