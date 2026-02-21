@@ -335,25 +335,17 @@ def clear_force_logout():
 # ════════════════════════════════════════════════════════════
 @app.before_request
 def track_user_activity():
-    """
-    Track user activity and check session validity
-    - Updates last_activity timestamp on every request
-    - Checks if session expired (6 hours of inactivity)
-    - Checks if admin triggered force logout
-    """
-    # Skip for static files, auth, and splash pages
     if request.endpoint and request.endpoint in ['static', 'auth', '/']:
         return
     
-    # Check if user is logged in
     if 'user' not in session:
+        if request.path.startswith('/api/'):
+            return jsonify({'status': 'unauthorized', 'reason': 'session_expired'}), 401
         return redirect(url_for('auth'))
     
-    # === CHECK 1: Force Logout Flag ===
+    # === CHECK 1: Global Force Logout Flag (file-based) ===
     if is_force_logout_active():
         user_email = session.get('user', {}).get('email', 'unknown')
-        
-        # Log forced logout
         db['session_logs'].insert_one({
             'email': user_email,
             'action': 'forced_logout',
@@ -362,45 +354,76 @@ def track_user_activity():
             'ip_address': request.remote_addr,
             'user_agent': request.headers.get('User-Agent')
         })
-        
         session.clear()
-        flash('Your session has been terminated. Please log in again.', 'warnings')
+        if request.path.startswith('/api/'):
+            return jsonify({'status': 'unauthorized', 'reason': 'global_logout'}), 401
+        flash('Your session has been terminated. Please log in again.', 'warning')
         return redirect(url_for('auth'))
-    
-    # === CHECK 2: Session Expiry (6 hours inactivity) ===
+
+    # === CHECK 2: Per-user block/force_logout from DB ===
+    user_id = session.get('user', {}).get('user_id')
+    if user_id:
+        db_user = db.users.find_one({'_id': ObjectId(user_id)}, {'status': 1, 'force_logout': 1})
+        if db_user:
+            if db_user.get('status') == 'blocked':
+                user_email = session.get('user', {}).get('email', 'unknown')
+                db['session_logs'].insert_one({
+                    'email': user_email,
+                    'action': 'forced_logout',
+                    'reason': 'account_blocked',
+                    'timestamp': datetime.now(NAIROBI_TZ),
+                    'ip_address': request.remote_addr,
+                    'user_agent': request.headers.get('User-Agent')
+                })
+                session.clear()
+                if request.path.startswith('/api/'):
+                    return jsonify({'status': 'unauthorized', 'reason': 'account_blocked'}), 401
+                flash('Your account has been suspended. Contact support.', 'warning')
+                return redirect(url_for('auth'))
+
+            if db_user.get('force_logout'):
+                user_email = session.get('user', {}).get('email', 'unknown')
+                db['session_logs'].insert_one({
+                    'email': user_email,
+                    'action': 'forced_logout',
+                    'reason': 'admin_force_logout',
+                    'timestamp': datetime.now(NAIROBI_TZ),
+                    'ip_address': request.remote_addr,
+                    'user_agent': request.headers.get('User-Agent')
+                })
+                db.users.update_one({'_id': ObjectId(user_id)}, {'$unset': {'force_logout': ''}})
+                session.clear()
+                if request.path.startswith('/api/'):
+                    return jsonify({'status': 'unauthorized', 'reason': 'force_logout'}), 401
+                flash('You have been logged out by an administrator.', 'warning')
+                return redirect(url_for('auth'))
+
+    # === CHECK 3: Session Expiry ===
     now = datetime.now(NAIROBI_TZ)
     last_activity = session.get('last_activity')
-    
     if last_activity:
         if isinstance(last_activity, str):
             last_activity = datetime.fromisoformat(last_activity)
-        
-        time_elapsed = now - last_activity
-        if time_elapsed > timedelta(hours=6):
+        if (now - last_activity) > timedelta(hours=6):
             user_email = session.get('user', {}).get('email', 'unknown')
-            
-            # Log session expiry
             db['session_logs'].insert_one({
                 'email': user_email,
                 'action': 'session_expired',
                 'reason': 'inactivity_6_hours',
-                'last_activity': last_activity,
                 'timestamp': now,
                 'ip_address': request.remote_addr,
                 'user_agent': request.headers.get('User-Agent')
             })
-            
             session.clear()
+            if request.path.startswith('/api/'):
+                return jsonify({'status': 'unauthorized', 'reason': 'session_expired'}), 401
             flash('Your session expired due to inactivity. Please log in again.', 'info')
             return redirect(url_for('auth', next=request.url))
-    
-    # === UPDATE: Store current activity time ===
+
     session['last_activity'] = now.isoformat()
     session.permanent = True
 
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
+
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
@@ -1404,9 +1427,11 @@ def expire_date_days_left(date_str):
  
 def process_date(date_value):
     """Convert a date value to a datetime object in Nairobi timezone."""
+    if date_value is None or date_value == '':
+        return None
     try:
-        if date_value is None:
-            return None
+        if date_value.tzinfo is None:
+            return UTC.localize(date_value).astimezone(NAIROBI_TZ)  # Correct
 
         if isinstance(date_value, datetime):
             if date_value.tzinfo is None:
