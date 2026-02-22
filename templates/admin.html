@@ -54,7 +54,7 @@
                     <strong id="stat-blocked-users">—</strong>
                 </div>
                 <div>
-                    <span>Failed Logins (24hrs)</span>
+                    <span>Failed Logins (Today)</span>
                     <strong id="stat-failed-attempts">—</strong>
                 </div>
             </div>
@@ -67,19 +67,17 @@
     <section id="section-users" data-section="users" hidden>
         <main>
             <h1>All Users</h1>
-
             <div id="users-search-bar">
                 <input type="text" id="users-search-input" placeholder="Search by name or email...">
                 <button id="users-search-btn">Search</button>
             </div>
-
             <div id="users-filter-bar">
                 <button class="filter-btn active" data-status="all">All</button>
                 <button class="filter-btn" data-status="pending">Pending Approval</button>
+                <button class="filter-btn" data-status="approved">Approved</button>
                 <button class="filter-btn" data-status="active">Active</button>
                 <button class="filter-btn" data-status="blocked">Blocked</button>
             </div>
-
             <table id="users-table">
                 <thead>
                     <tr>
@@ -106,7 +104,6 @@
         <main>
             <button id="btn-back-to-users">← Back to Users</button>
             <h1 id="detail-user-name">—</h1>
-
             <div id="detail-user-info">
                 <p><strong>Email</strong><span id="detail-email">—</span></p>
                 <p><strong>Phone</strong><span id="detail-phone">—</span></p>
@@ -115,14 +112,12 @@
                 <p><strong>Joined</strong><span id="detail-joined">—</span></p>
                 <p><strong>Last Login</strong><span id="detail-last-login">—</span></p>
             </div>
-
             <div id="detail-admin-actions">
                 <h2>Actions</h2>
                 <button id="btn-detail-approve">Approve</button>
                 <button id="btn-detail-block">Block User</button>
                 <button id="btn-detail-force-logout">Force End Session</button>
                 <button id="btn-detail-reset-pw">Reset Password</button>
-
                 <div id="detail-role-change">
                     <label for="role-select">Role</label>
                     <select id="role-select">
@@ -133,21 +128,33 @@
                     <button id="btn-detail-change-role">Apply</button>
                 </div>
             </div>
-
             <div id="detail-logs">
                 <h2>Session &amp; Activity History</h2>
+
+                <!-- Date picker + download -->
+                <div id="detail-logs-controls">
+                    <input type="date" id="detail-logs-date-picker">
+                    <button id="btn-clear-logs-date">Clear</button>
+                    <button id="btn-download-logs">⬇ Download</button>
+                </div>
+
                 <table id="detail-logs-table">
                     <thead>
                         <tr>
                             <th>Action</th>
                             <th>Reason</th>
-                            <th>Time</th>
+                            <th>Time (EAT)</th>
                             <th>IP Address</th>
                             <th>Device / Browser</th>
                         </tr>
                     </thead>
                     <tbody id="detail-logs-body"></tbody>
                 </table>
+                <div id="detail-logs-pagination">
+                    <button id="btn-logs-prev">← Prev</button>
+                        <span id="logs-page-info">Page 1 of 1</span>
+                    <button id="btn-logs-next">Next →</button>
+                </div>
                 <div id="detail-logs-empty" hidden>No activity logged yet.</div>
                 <div id="detail-logs-loading" hidden>Loading...</div>
             </div>

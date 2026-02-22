@@ -2129,7 +2129,10 @@ def dashboard():
     }).sort("timestamp", -1).skip(1).limit(1)
     
     last_log_list = list(last_log)
-    last_login_timestamp = last_log_list[0]['timestamp'] if last_log_list else None
+    if last_log_list:
+        last_login_timestamp = to_eat(last_log_list[0]['timestamp'])
+    else:
+        last_login_timestamp = None
     
     search_query = request.args.get('search', '').strip()
     
