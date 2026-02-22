@@ -478,7 +478,10 @@ def get_user(user_id):
             .limit(per_page))
 
         for log in logs:
-            log["timestamp"] = to_eat(log["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+            if log.get("timestamp"):
+                log["timestamp"] = to_eat(log["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                log["timestamp"] = "—"
             log.setdefault("reason", "—")
             log.setdefault("ip_address", "—")
             log.setdefault("user_agent", "—")
