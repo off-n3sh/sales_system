@@ -67,6 +67,7 @@ ADMIN_PORT      = Config.ADMIN_PORT
 LOG_PATH        = Config.LOG_PATH
 
 NAIROBI_TZ = pytz.timezone('Africa/Nairobi')
+UTC = pytz.utc
 
 # ============================================================================
 # FLASK APP
@@ -108,6 +109,12 @@ db_lifecycle_logs.create_index([('timestamp', -1)])
 # ============================================================================
 # SERVER INFO HELPER — called on every ws_connect
 # ============================================================================
+def to_eat(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return UTC.localize(dt).astimezone(NAIROBI_TZ)
+    return dt.astimezone(NAIROBI_TZ)
 
 def parse_backup_log():
     """Read work app backup.log, find last backup result."""
@@ -305,34 +312,42 @@ def admin_panel():
 # ============================================================================
 # API: STATS
 # ============================================================================
-
 @app.route('/api/admin/stats')
 @admin_required
 def get_stats():
     try:
-        total       = users_collection.count_documents({})
-        active_sess = users_collection.count_documents({'status': 'active'})
-        pending     = users_collection.count_documents({'status': 'pending'})
-        blocked     = users_collection.count_documents({'status': 'blocked'})
-        since_24h   = tz_now() - timedelta(hours=24)
-        failed_24h  = logs_collection.count_documents({
+        now = tz_now()
+        today_start_eat = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start_eat.astimezone(pytz.utc)
+
+        total   = users_collection.count_documents({})
+        pending = users_collection.count_documents({'status': 'pending'})
+        blocked = users_collection.count_documents({'status': 'blocked'})
+
+        active_sess = len(logs_collection.distinct('email', {
+            'action': 'login_success',
+            'timestamp': {'$gte': today_start_utc}
+        }))
+
+        failed_today = logs_collection.count_documents({
             'action': 'login_failed',
-            'timestamp': {'$gte': since_24h}
+            'timestamp': {'$gte': today_start_utc}
         })
+
         return jsonify({"status": "success", "data": {
-            "total_users":        total,
-            "active_sessions":    active_sess,
-            "pending_users":      pending,
-            "blocked_users":      blocked,
-            "failed_attempts_24h": failed_24h
+            "total_users":         total,
+            "active_sessions":     active_sess,
+            "pending_users":       pending,
+            "blocked_users":       blocked,
+            "failed_attempts_24h": failed_today
         }}), 200
+
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
 # ============================================================================
 # API: USERS
 # ============================================================================
-
 @app.route('/api/admin/users')
 @admin_required
 def get_users():
@@ -347,9 +362,31 @@ def get_users():
                 {"last_name":  {"$regex": q, "$options": "i"}},
             ]}
         if status and status != 'all':
-            query['status'] = status
+            if status == 'approved':
+                query['status'] = 'active'  # approved = active in DB
+            else:
+                query['status'] = status
+
         users = list(users_collection.find(query, {"password": 0, "login_history": 0}))
-        return jsonify({"status": "success", "data": [serialize_user(u) for u in users]}), 200
+
+        # Get today's active emails from session_logs
+        now = tz_now()
+        today_start_utc = now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
+        logged_in_today = set(logs_collection.distinct('email', {
+            'action': 'login_success',
+            'timestamp': {'$gte': today_start_utc}
+        }))
+
+        serialized = []
+        for u in users:
+            user_data = serialize_user(u)
+            if u.get('status') == 'active':
+                user_data['display_status'] = 'active' if u.get('email') in logged_in_today else 'approved'
+            else:
+                user_data['display_status'] = u.get('status')
+            serialized.append(user_data)
+
+        return jsonify({"status": "success", "data": serialized}), 200
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
@@ -391,11 +428,77 @@ def get_user(user_id):
         user = users_collection.find_one({"_id": ObjectId(user_id)}, {"password": 0, "login_history": 0})
         if not user:
             return jsonify({"status": "error", "error": "User not found"}), 404
-        logs = list(logs_collection.find({"email": user['email']}).sort("timestamp", -1).limit(100))
+
+        # Timezone-aware last login from session_logs
+        last_log = logs_collection.find_one(
+            {"email": user.get("email"), "action": "login_success"},
+            sort=[("timestamp", -1)]
+        )
+        last_login_eat = to_eat(last_log["timestamp"]).strftime("%Y-%m-%d %H:%M") if last_log else "Never"
+
+        # display_status
+        now = tz_now()
+        today_start_utc = now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
+        logged_in_today = logs_collection.find_one({
+            "email": user.get("email"),
+            "action": "login_success",
+            "timestamp": {"$gte": today_start_utc}
+        })
+        if user.get("status") == "active":
+            display_status = "active" if logged_in_today else "approved"
+        else:
+            display_status = user.get("status")
+
+        # Date filter for logs
+        date_str = request.args.get("date")
+        log_query = {"email": user.get("email")}
+        if date_str:
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                day_start = NAIROBI_TZ.localize(date_obj.replace(hour=0, minute=0, second=0))
+                day_end   = NAIROBI_TZ.localize(date_obj.replace(hour=23, minute=59, second=59))
+                log_query["timestamp"] = {
+                    "$gte": day_start.astimezone(pytz.utc),
+                    "$lte": day_end.astimezone(pytz.utc)
+                }
+            except ValueError:
+                pass
+
+        # Pagination
+        page     = int(request.args.get("page", 1))
+        per_page = 50
+        skip     = (page - 1) * per_page
+
+        total_logs  = logs_collection.count_documents(log_query)
+        total_pages = max(1, (total_logs + per_page - 1) // per_page)
+
+        logs = list(logs_collection.find(log_query, {"_id": 0})
+            .sort("timestamp", -1)
+            .skip(skip)
+            .limit(per_page))
+
+        for log in logs:
+            log["timestamp"] = to_eat(log["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+            log.setdefault("reason", "—")
+            log.setdefault("ip_address", "—")
+            log.setdefault("user_agent", "—")
+
+        user_data = serialize_user(user)
+        user_data["last_login"]     = last_login_eat
+        user_data["display_status"] = display_status
+
         return jsonify({"status": "success", "data": {
-            "user":         serialize_user(user),
-            "session_logs": [serialize_log(l) for l in logs]
+            "user": user_data,
+            "session_logs": logs,
+            "pagination": {
+                "current_page": page,
+                "total_pages":  total_pages,
+                "total_logs":   total_logs,
+                "has_prev":     page > 1,
+                "has_next":     page < total_pages
+            }
         }}), 200
+
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 

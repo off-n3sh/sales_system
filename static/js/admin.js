@@ -117,12 +117,13 @@ function buildUsersUrl(q) {
 }
 
 function buildUserRow(user) {
+    const displayStatus = user.display_status || user.status;
     return `
         <td>${user.first_name} ${user.last_name}</td>
         <td>${user.email}</td>
         <td>${user.phone}</td>
         <td>${user.role}</td>
-        <td><span class="badge badge-${user.status}">${user.status}</span></td>
+        <td><span class="badge badge-${displayStatus}">${displayStatus}</span></td>
         <td>${user.created_at}</td>
         <td>
             <button class="btn-view-user" data-id="${user.id}">View</button>
@@ -198,12 +199,17 @@ document.getElementById('users-search-input').addEventListener('keydown', e => {
 // SECTION 3: USER DETAIL
 // ============================================================================
 
-let currentUserId   = null;
-let currentUserData = null;
+let currentUserId     = null;
+let currentUserData   = null;
+let currentUserLogs   = [];
+let currentLogsPage   = 1;
+let currentDateFilter = '';
 
-async function loadUserDetail(userId) {
+async function loadUserDetail(userId, dateFilter = '', page = 1) {
     showSection('user-detail');
-    currentUserId = userId;
+    currentUserId     = userId;
+    currentLogsPage   = page;
+    currentDateFilter = dateFilter;
 
     const loadingEl = document.getElementById('detail-logs-loading');
     const emptyEl   = document.getElementById('detail-logs-empty');
@@ -212,19 +218,22 @@ async function loadUserDetail(userId) {
     setLoading(loadingEl, emptyEl, true);
     tbody.innerHTML = '';
 
-    const { ok, data } = await apiFetch(`${API}/users/${userId}`);
+    const url = `${API}/users/${userId}?page=${page}${dateFilter ? `&date=${dateFilter}` : ''}`;
+
+    const { ok, data } = await apiFetch(url);
     loadingEl.setAttribute('hidden', '');
 
     if (!ok) return showToast(data.error || 'Failed to load user', true);
 
     const user      = data.data.user;
     currentUserData = user;
+    currentUserLogs = data.data.session_logs;
 
     document.getElementById('detail-user-name').textContent  = `${user.first_name} ${user.last_name}`;
     document.getElementById('detail-email').textContent      = user.email;
     document.getElementById('detail-phone').textContent      = user.phone;
     document.getElementById('detail-role').textContent       = user.role;
-    document.getElementById('detail-status').textContent     = user.status;
+    document.getElementById('detail-status').textContent     = user.display_status || user.status;
     document.getElementById('detail-joined').textContent     = user.created_at;
     document.getElementById('detail-last-login').textContent = user.last_login;
 
@@ -237,7 +246,7 @@ async function loadUserDetail(userId) {
     const approveBtn         = document.getElementById('btn-detail-approve');
     approveBtn.style.display = user.status === 'pending' ? 'inline-block' : 'none';
 
-    const logs = data.data.session_logs;
+    const logs = currentUserLogs;
     if (!logs.length) { emptyEl.removeAttribute('hidden'); return; }
 
     logs.forEach(log => {
@@ -251,7 +260,61 @@ async function loadUserDetail(userId) {
         `;
         tbody.appendChild(tr);
     });
+
+    // Pagination controls
+    const p = data.data.pagination;
+    document.getElementById('logs-page-info').textContent = `Page ${p.current_page} of ${p.total_pages} (${p.total_logs} total)`;
+    document.getElementById('btn-logs-prev').disabled = !p.has_prev;
+    document.getElementById('btn-logs-next').disabled = !p.has_next;
 }
+
+// Date picker
+document.getElementById('detail-logs-date-picker').addEventListener('change', function() {
+    if (currentUserId) loadUserDetail(currentUserId, this.value, 1);
+});
+
+document.getElementById('btn-clear-logs-date').addEventListener('click', function() {
+    document.getElementById('detail-logs-date-picker').value = '';
+    if (currentUserId) loadUserDetail(currentUserId, '', 1);
+});
+
+// Pagination buttons
+document.getElementById('btn-logs-prev').addEventListener('click', () => {
+    loadUserDetail(currentUserId, currentDateFilter, currentLogsPage - 1);
+});
+
+document.getElementById('btn-logs-next').addEventListener('click', () => {
+    loadUserDetail(currentUserId, currentDateFilter, currentLogsPage + 1);
+});
+
+// Download logs as CSV
+document.getElementById('btn-download-logs').addEventListener('click', function() {
+    if (!currentUserLogs.length) return showToast('No logs to download', true);
+
+    const userName = `${currentUserData.first_name}_${currentUserData.last_name}`;
+    const date     = document.getElementById('detail-logs-date-picker').value || 'all';
+
+    const headers  = ['Action', 'Reason', 'Time (EAT)', 'IP Address', 'Device/Browser'];
+    const rows     = currentUserLogs.map(log => [
+        log.action,
+        log.reason,
+        log.timestamp,
+        log.ip_address,
+        log.user_agent
+    ]);
+
+    const csv = [headers, ...rows]
+        .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${userName}_logs_${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
 
 document.getElementById('btn-back-to-users').addEventListener('click', () => showSection('users'));
 
@@ -279,7 +342,7 @@ document.getElementById('btn-detail-reset-pw').addEventListener('click', () => {
 
 document.getElementById('btn-detail-change-role').addEventListener('click', async () => {
     if (!currentUserId) return;
-    const role     = document.getElementById('role-select').value;
+    const role = document.getElementById('role-select').value;
     const { ok, data } = await apiFetch(`${API}/users/${currentUserId}/role`, {
         method: 'POST',
         body:   JSON.stringify({ role })
@@ -288,7 +351,6 @@ document.getElementById('btn-detail-change-role').addEventListener('click', asyn
     showToast(data.message);
     loadUserDetail(currentUserId);
 });
-
 // ============================================================================
 // APPROVE / BLOCK
 // ============================================================================
