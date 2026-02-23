@@ -240,164 +240,177 @@
         </main>
     </section>
 
-    <!-- ================================================
-         SECTION: DATABASE MONITOR
-    ================================================ -->
-    <section id="section-database" data-section="database" hidden>
-        <main>
-            <h1>Database Monitor</h1>
+<!-- ================================================
+     SECTION: DATABASE MONITOR
+================================================ -->
+<section id="section-database" data-section="database" hidden>
+    <main>
+        <h1>Database Monitor</h1>
 
-            <!-- Connection bar -->
-            <div id="db-connection-panel">
-                <div id="db-connection-fields">
-                    <div class="db-field">
-                        <label for="db-hostname">Host</label>
-                        <input type="text" id="db-hostname" value="localhost" placeholder="hostname or IP">
+        <!-- Connection bar -->
+        <div id="db-connection-panel">
+            <div id="db-connection-fields">
+                <div class="db-field">
+                    <label for="db-hostname">Host</label>
+                    <input type="text" id="db-hostname" value="localhost" placeholder="hostname or IP">
+                </div>
+                <div class="db-field db-field-sm">
+                    <label for="db-port">Port</label>
+                    <input type="text" id="db-port" value="27017">
+                </div>
+                <button id="db-connect-btn">Connect</button>
+            </div>
+            <div id="db-ws-status">
+                <span class="db-ws-dot" id="db-ws-dot"></span>
+                <span id="db-ws-label">Disconnected</span>
+                <span id="db-offline-tag" class="db-offline-tag" hidden>● OFFLINE</span>
+            </div>
+        </div>
+
+        <!-- Stats cards -->
+        <div id="db-stats-bar">
+            <div class="db-stat-card db-stat-card--server" id="db-server-stat-card">
+                <span class="db-stat-placeholder">Connect to load server info</span>
+            </div>
+            <div id="db-stats-right">
+                <div class="db-stats-row">
+                    <div class="db-stat-card">
+                        <span>Active Connections</span>
+                        <strong id="db-stat-active">0</strong>
                     </div>
-                    <div class="db-field db-field-sm">
-                        <label for="db-port">Port</label>
-                        <input type="text" id="db-port" value="27017">
+                    <div class="db-stat-card">
+                        <span>Logins Today</span>
+                        <strong id="db-stat-logins">0</strong>
                     </div>
-                    <button id="db-connect-btn">Connect</button>
                 </div>
-                <div id="db-ws-status">
-                    <span class="db-ws-dot" id="db-ws-dot"></span>
-                    <span id="db-ws-label">Disconnected</span>
-                    <span id="db-offline-tag" class="db-offline-tag" hidden>● OFFLINE</span>
+                <div class="db-stats-row">
+                    <div class="db-stat-card db-stat-card--warn">
+                        <span>Failed Auths</span>
+                        <strong id="db-stat-failed">0</strong>
+                    </div>
+                    <div class="db-stat-card">
+                        <span>Restarts</span>
+                        <strong id="db-stat-restarts">0</strong>
+                    </div>
                 </div>
-            </div>
-
-            <!-- Stats cards -->
-            <div id="db-stats-bar">
-
-                <!-- Server stat card — filled by JS from serverStatus + backup log -->
-                <div class="db-stat-card db-stat-card--server" id="db-server-stat-card">
-                    <span class="db-stat-placeholder">Connect to load server info</span>
-                </div>
-
-                <div class="db-stat-card">
-                    <span>PID</span>
-                    <strong id="db-stat-pid">—</strong>
-                </div>
-                <div class="db-stat-card">
-                    <span>Port</span>
-                    <strong id="db-stat-port">—</strong>
-                </div>
-                <div class="db-stat-card">
-                    <span>Active Connections</span>
-                    <strong id="db-stat-active">0</strong>
-                </div>
-                <div class="db-stat-card">
-                    <span>Logins Today</span>
-                    <strong id="db-stat-logins">0</strong>
-                </div>
-                <div class="db-stat-card db-stat-card--warn">
-                    <span>Failed Auths</span>
-                    <strong id="db-stat-failed">0</strong>
-                </div>
-                <div class="db-stat-card">
-                    <span>Restarts</span>
-                    <strong id="db-stat-restarts">0</strong>
+                <div class="db-stats-row">
+                    <div class="db-stat-card">
+                        <span>PID</span>
+                        <strong id="db-stat-pid">—</strong>
+                    </div>
+                    <div class="db-stat-card">
+                        <span>Port</span>
+                        <strong id="db-stat-port">—</strong>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Live Sessions -->
-            <div class="db-window">
-                <div class="db-window-header">
-                    <h2>Active Sessions</h2>
-                    <span class="db-window-badge" id="db-session-count">0</span>
-                </div>
-                <div class="db-window-controls">
-                    <input type="search" id="db-session-search" placeholder="Search user or IP...">
-                </div>
-                <div class="db-table-scroll">
-                    <table id="db-sessions-table">
-                        <thead>
-                            <tr>
-                                <th>DB User</th>
-                                <th>App User</th>
-                                <th>IP</th>
-                                <th>Connected</th>
-                                <th>App</th>
-                                <th>Type</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="db-sessions-body"></tbody>
-                    </table>
-                </div>
-                <div id="db-sessions-empty" hidden>No active sessions.</div>
+        <!-- Active Sessions -->
+        <div class="db-window">
+            <div class="db-window-header">
+                <h2>Active Sessions</h2>
+                <span class="db-window-badge" id="db-session-count">0</span>
             </div>
-
-            <!-- Auth Event Log -->
-            <div class="db-window">
-                <div class="db-window-header">
-                    <h2>Authentication Log</h2>
-                    <span class="db-window-badge" id="db-auth-count">0</span>
-                </div>
-                <div class="db-window-controls">
-                    <input type="search" id="db-auth-search" placeholder="Search...">
-                    <select id="db-auth-filter">
-                        <option value="all">All</option>
-                        <option value="success">Success</option>
-                        <option value="failed">Failed</option>
-                        <option value="app">App Users</option>
-                        <option value="direct">Direct Connections</option>
-                    </select>
-                </div>
-                <div class="db-scroll-area" id="db-auth-log"></div>
-                <div id="db-auth-empty" hidden>No auth events yet.</div>
+            <div class="db-window-controls">
+                <input type="search" id="db-session-search" placeholder="Search user or IP...">
             </div>
-
-            <!-- Server Lifecycle -->
-            <div class="db-window">
-                <div class="db-window-header">
-                    <h2>Server Lifecycle</h2>
-                    <span class="db-window-badge" id="db-lifecycle-count">0</span>
-                </div>
-                <div class="db-scroll-area" id="db-lifecycle-log"></div>
-                <div id="db-lifecycle-empty">Watching for events...</div>
+            <div class="db-table-scroll">
+                <table id="db-sessions-table">
+                    <thead>
+                        <tr>
+                            <th>DB User</th>
+                            <th>App User</th>
+                            <th>IP</th>
+                            <th>Connected</th>
+                            <th>App</th>
+                            <th>Uptime</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="db-sessions-body"></tbody>
+                </table>
             </div>
+            <div id="db-sessions-empty" hidden>No active sessions.</div>
+        </div>
 
-            <!-- DB Console -->
-            <div class="db-window">
-                <div class="db-window-header">
-                    <h2>DB Console</h2>
-                    <span class="db-console-warning">⚠ Whitelisted commands only</span>
-                </div>
-                <div id="db-console-body">
-                    <div id="db-console-controls">
-                        <div class="db-console-row">
-                            <select id="db-console-cmd">
-                                <option value="">— Select command —</option>
-                                <optgroup label="Server">
-                                    <option value="serverStatus">serverStatus — server metrics</option>
-                                    <option value="currentOp">currentOp — running operations</option>
-                                    <option value="listDatabases">listDatabases — all databases</option>
-                                </optgroup>
-                                <optgroup label="Sessions">
-                                    <option value="listSessions">listSessions — active sessions</option>
-                                    <option value="killSession">killSession — kill a session (enter ID below)</option>
-                                </optgroup>
-                                <optgroup label="Users">
-                                    <option value="listUsers">listUsers — all DB users</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        <div class="db-console-row">
-                            <input type="text" id="db-console-arg" placeholder="Session ID (for killSession only)">
+        <!-- Authentication Log -->
+        <div class="db-window">
+            <div class="db-window-header">
+                <h2>Authentication Log</h2>
+                <span class="db-window-badge" id="db-auth-count">0</span>
+            </div>
+            <div class="db-window-controls">
+                <input type="search" id="db-auth-search" placeholder="Search user or IP...">
+                <select id="db-auth-filter">
+                    <option value="all">All</option>
+                    <option value="login_success">Login Success</option>
+                    <option value="login_failed">Login Failed</option>
+                    <option value="logout">Logout</option>
+                    <option value="direct">Direct Access</option>
+                </select>
+                <input type="date" id="db-auth-date-from" title="From">
+                <input type="date" id="db-auth-date-to" title="To">
+                <button id="db-auth-date-filter">Filter</button>
+                <button id="db-auth-date-clear" class="logs-btn-clear">Clear</button>
+            </div>
+            <div class="db-table-scroll" id="db-auth-log"></div>
+            <div id="db-auth-empty" hidden>No auth events yet.</div>
+        </div>
+
+        <!-- Server Lifecycle -->
+        <div class="db-window">
+            <div class="db-window-header">
+                <h2>Server Lifecycle</h2>
+                <span class="db-window-badge" id="db-lifecycle-count">0</span>
+            </div>
+            <div class="db-window-controls">
+                <input type="date" id="db-lc-date-from" title="From">
+                <input type="date" id="db-lc-date-to" title="To">
+                <button id="db-lc-date-filter">Filter</button>
+                <button id="db-lc-date-clear" class="logs-btn-clear">Clear</button>
+            </div>
+            <div class="db-scroll-area" id="db-lifecycle-log"></div>
+            <div id="db-lifecycle-empty">Watching for events...</div>
+        </div>
+
+        <!-- DB Console -->
+        <div class="db-window">
+            <div class="db-window-header">
+                <h2>DB Console</h2>
+                <span class="db-console-warning">⚠ Whitelisted commands only</span>
+            </div>
+            <div id="db-console-body">
+                <div id="db-console-sidebar">
+                    <div class="db-console-group">
+                        <span class="db-console-group-label">Server</span>
+                        <button class="db-cmd-btn" data-cmd="serverStatus">serverStatus</button>
+                        <button class="db-cmd-btn" data-cmd="currentOp">currentOp</button>
+                        <button class="db-cmd-btn" data-cmd="listDatabases">listDatabases</button>
+                    </div>
+                    <div class="db-console-group">
+                        <span class="db-console-group-label">Sessions</span>
+                        <button class="db-cmd-btn" data-cmd="listSessions">listSessions</button>
+                        <button class="db-cmd-btn db-cmd-btn--danger" data-cmd="killSession" data-needs-arg="true">killSession</button>
+                        <div id="db-console-arg-wrap" hidden>
+                            <input type="text" id="db-console-arg" placeholder="Session ID">
                             <button id="db-console-run">Run</button>
-                            <button id="db-console-clear">Clear</button>
                         </div>
                     </div>
-                    <div id="db-console-output">
-                        <div id="db-console-placeholder">Select a command and press Run.</div>
+                    <div class="db-console-group">
+                        <span class="db-console-group-label">Users</span>
+                        <button class="db-cmd-btn" data-cmd="listUsers">listUsers</button>
                     </div>
+                    <button id="db-console-clear" class="db-cmd-btn db-cmd-btn--muted">Clear Output</button>
+                </div>
+                <div id="db-console-output">
+                    <div id="db-console-placeholder">Select a command from the left.</div>
                 </div>
             </div>
+        </div>
 
-        </main>
-    </section>
+    </main>
+</section>
 
     <!-- ================================================
          SECTION: LOGS
@@ -419,24 +432,26 @@
                     <div class="logs-filter-group">
                         <label for="laf-from">From</label>
                         <input type="date" id="laf-from">
-                    </div>
-                    <div class="logs-filter-group">
-                        <label for="laf-to">To</label>
-                        <input type="date" id="laf-to">
-                    </div>
-                    <div class="logs-filter-group">
-                        <label for="laf-type">Type</label>
-                        <select id="laf-type">
-                            <option value="all">All</option>
-                            <option value="app">App</option>
-                            <option value="success">Direct OK</option>
-                            <option value="failed">Failed</option>
-                        </select>
-                    </div>
-                    <div class="logs-filter-group logs-filter-group--search">
-                        <label for="laf-search">Search</label>
-                        <input type="text" id="laf-search" placeholder="user, IP…">
-                    </div>
+                </div>
+                <div class="logs-filter-group">
+                    <label for="laf-to">To</label>
+                    <input type="date" id="laf-to">
+                </div>
+                <div class="logs-filter-group">
+                    <label for="laf-type">Type</label>
+                    <select id="laf-type">
+                        <option value="all">All</option>
+                        <option value="app">App</option>
+                        <option value="app_init">App Init</option>
+                        <option value="success">Direct OK</option>
+                        <option value="failed">Failed</option>
+                        <option value="out">Disconnected</option>
+                    </select>
+                </div>
+                <div class="logs-filter-group logs-filter-group--search">
+                    <label for="laf-search">Search</label>
+                    <input type="text" id="laf-search" placeholder="user, IP…">
+                </div>
                     <button id="laf-run">Filter</button>
                     <button id="laf-clear" class="logs-btn-clear">Clear</button>
                 </div>
@@ -454,6 +469,7 @@
                                 <th>IP</th>
                                 <th>Client</th>
                                 <th>Timestamp</th>
+                                <th>Duration</th>
                             </tr>
                         </thead>
                         <tbody id="laf-body"></tbody>

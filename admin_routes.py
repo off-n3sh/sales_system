@@ -758,16 +758,19 @@ def get_db_auth_logs():
         )
 
         def serialize_auth_log(e):
-            ts = e.get('timestamp')
+            ts  = e.get('timestamp')
+            dts = e.get('disconnect_time')
             return {
-                'type':     e.get('type', '—'),
-                'username': e.get('username', '—'),
-                'app_user': e.get('app_user'),
-                'ip':       e.get('ip', '—'),
-                'app_name': e.get('app_name'),
-                'timestamp': ts.strftime('%Y-%m-%d %H:%M:%S') if ts else e.get('raw_ts', '—'),
+                'type':             e.get('type', '—'),
+                'username':         e.get('username', '—'),
+                'app_user':         e.get('app_user') or '—',
+                'ip':               e.get('ip', '—'),
+                'app_name':         e.get('app_name') or '—',
+                'client_tag':       e.get('client_tag', '—'),
+                'duration':         e.get('duration') or '—',
+                'timestamp':        to_eat(ts).strftime('%Y-%m-%d %H:%M:%S') if ts else e.get('raw_ts', '—'),
+                'disconnect_time':  to_eat(dts).strftime('%Y-%m-%d %H:%M:%S') if dts else None,
             }
-
         return jsonify({
             'status': 'success',
             'total':  total,
@@ -938,60 +941,6 @@ class MongoEventProcessor:
         if conn.get('app_name'):   return conn['app_name'].upper()[:10]
         return 'DIRECT'
 
-    def handle_network(self, event):
-        log_id = event['id']
-        attr   = event['attr']
-
-        if log_id == 22943:  # connection accepted
-            conn_id   = attr.get('connectionId')
-            remote_ip = attr.get('remote', '').split(':')[0]
-            self.active_connections[conn_id] = {
-                'connection_id': conn_id,
-                'ip':            remote_ip,
-                'connect_time':  event['timestamp'],
-                'username':      None,
-                'app_name':      None,
-                'driver':        None,
-            }
-
-        elif log_id == 51800:  # client metadata — driver.name + application.name
-            ctx      = event['context']
-            conn_num = ctx.replace('conn', '') if 'conn' in ctx else None
-            if conn_num and conn_num.isdigit():
-                conn_id = int(conn_num)
-                if conn_id in self.active_connections:
-                    doc      = attr.get('doc', {})
-                    driver   = doc.get('driver',      {}).get('name', '')
-                    app_name = doc.get('application', {}).get('name', '')
-                    self.active_connections[conn_id]['driver']   = driver
-                    self.active_connections[conn_id]['app_name'] = app_name or driver or None
-
-        elif log_id == 22944:  # connection ended — emit logout per conn_id
-            conn_id    = attr.get('connectionId')
-            if conn_id not in self.active_connections:
-                return
-            connection = self.active_connections.pop(conn_id)
-            username   = connection.get('username')
-            remote_ip  = connection.get('ip')
-
-            if username:
-                tag = self.get_client_tag(conn_id) if conn_id in self.active_connections else 'DIRECT'
-                self.emit('logout', {
-                    'username':        username,
-                    'ip':              remote_ip,
-                    'disconnect_time': event['timestamp'],
-                    'connection_id':   conn_id,
-                    'client_tag':      tag,
-                })
-                # Remove from logged_in_users only if no more open connections
-                user_key = f"{username}@{remote_ip}"
-                if user_key in self.logged_in_users:
-                    conns = self.logged_in_users[user_key].get('connections', [])
-                    if conn_id in conns:
-                        conns.remove(conn_id)
-                    if not conns:
-                        del self.logged_in_users[user_key]
-
     def handle_access(self, event):
         log_id = event['id']
         attr   = event['attr']
@@ -1006,25 +955,31 @@ class MongoEventProcessor:
             if conn_id and conn_id in self.active_connections:
                 self.active_connections[conn_id]['username'] = username
 
-            # Track by conn_id not username@ip — each connection is its own session
-            conn_key  = str(conn_id) if conn_id else f"{username}@{remote_ip}"
-            app_name  = self.active_connections.get(conn_id, {}).get('app_name') if conn_id else None
+            app_name   = self.active_connections.get(conn_id, {}).get('app_name') if conn_id else None
             client_tag = self.get_client_tag(conn_id) if conn_id else 'DIRECT'
 
-            # Look up email from session_logs for PyMongo app connections
             app_user = None
             if client_tag == 'PYMONGO':
                 try:
                     window_start = tz_now() - timedelta(seconds=5)
                     log_entry = logs_collection.find_one(
                         {'action': 'login_success', 'ip_address': remote_ip,
-                         'timestamp': {'$gte': window_start}},
+                        'timestamp': {'$gte': window_start}},
                         sort=[('timestamp', -1)]
                     )
                     if log_entry:
-                        app_user = log_entry.get('email')
+                        app_user   = log_entry.get('email')
+                        client_tag = 'APP'
+                    else:
+                        app_user   = 'system'
+                        client_tag = 'APP_INIT'
                 except Exception:
-                    pass
+                    app_user   = 'system'
+                    client_tag = 'APP_INIT'
+
+            if conn_id and conn_id in self.active_connections:
+                self.active_connections[conn_id]['client_tag'] = client_tag
+                self.active_connections[conn_id]['app_user']   = app_user
 
             self.emit('login', {
                 'connection_id': conn_id,
@@ -1039,8 +994,9 @@ class MongoEventProcessor:
             user_key = f"{username}@{remote_ip}"
             if user_key not in self.logged_in_users:
                 self.logged_in_users[user_key] = {
-                    'username': username, 'ip': remote_ip,
-                    'login_time': event['timestamp'],
+                    'username':    username,
+                    'ip':          remote_ip,
+                    'login_time':  event['timestamp'],
                     'connections': []
                 }
             if conn_id and conn_id not in self.logged_in_users[user_key]['connections']:
@@ -1048,28 +1004,27 @@ class MongoEventProcessor:
 
             self.stats['total_logins'] += 1
 
-            # Persist — every connection gets its own record
             try:
-                ev_type = 'app' if client_tag == 'PYMONGO' else 'success'
                 db_auth_logs.insert_one({
-                    'type':       ev_type,
-                    'username':   username,
-                    'app_user':   app_user,
-                    'ip':         remote_ip,
-                    'app_name':   app_name,
-                    'client_tag': client_tag,
-                    'timestamp':  tz_now(),
-                    'raw_ts':     event['timestamp'],
+                    'type':          client_tag.lower(),
+                    'username':      username,
+                    'app_user':      app_user,
+                    'ip':            remote_ip,
+                    'app_name':      app_name,
+                    'client_tag':    client_tag,
+                    'connection_id': conn_id,
+                    'timestamp':     tz_now(),
+                    'raw_ts':        event['timestamp'],
                 })
             except Exception as e:
                 print(f"[Auth log insert error] {e}")
 
         elif log_id == 20249:  # auth failed
-            username  = attr.get('principalName')
-            remote_ip = attr.get('remote', '').split(':')[0]
-            user_key  = f"{username}@{remote_ip}"
-            conn_num  = ctx.replace('conn', '') if 'conn' in ctx else None
-            conn_id   = int(conn_num) if conn_num and conn_num.isdigit() else None
+            username   = attr.get('principalName')
+            remote_ip  = attr.get('remote', '').split(':')[0]
+            user_key   = f"{username}@{remote_ip}"
+            conn_num   = ctx.replace('conn', '') if 'conn' in ctx else None
+            conn_id    = int(conn_num) if conn_num and conn_num.isdigit() else None
             client_tag = self.get_client_tag(conn_id) if conn_id else 'DIRECT'
 
             if not self.is_recent(user_key, event['timestamp']):
@@ -1084,17 +1039,131 @@ class MongoEventProcessor:
                 try:
                     app_name = self.active_connections.get(conn_id, {}).get('app_name') if conn_id else None
                     db_auth_logs.insert_one({
-                        'type':       'failed',
-                        'username':   username,
-                        'app_user':   None,
-                        'ip':         remote_ip,
-                        'app_name':   app_name,
-                        'client_tag': client_tag,
-                        'timestamp':  tz_now(),
-                        'raw_ts':     event['timestamp'],
+                        'type':          'failed',
+                        'username':      username,
+                        'app_user':      None,
+                        'ip':            remote_ip,
+                        'app_name':      app_name,
+                        'client_tag':    client_tag,
+                        'connection_id': conn_id,
+                        'timestamp':     tz_now(),
+                        'raw_ts':        event['timestamp'],
                     })
                 except Exception as e:
                     print(f"[Auth failed log insert error] {e}")
+
+
+    def handle_network(self, event):
+        log_id = event['id']
+        attr   = event['attr']
+
+        if log_id == 22943:  # connection accepted
+            conn_id   = attr.get('connectionId')
+            remote_ip = attr.get('remote', '').split(':')[0]
+            self.active_connections[conn_id] = {
+                'connection_id': conn_id,
+                'ip':            remote_ip,
+                'connect_time':  event['timestamp'],
+                'username':      None,
+                'app_name':      None,
+                'driver':        None,
+                'client_tag':    None,
+                'app_user':      None,
+            }
+
+        elif log_id == 51800:  # client metadata
+            ctx      = event['context']
+            conn_num = ctx.replace('conn', '') if 'conn' in ctx else None
+            if conn_num and conn_num.isdigit():
+                conn_id = int(conn_num)
+                if conn_id in self.active_connections:
+                    doc      = attr.get('doc', {})
+                    driver   = doc.get('driver',      {}).get('name', '')
+                    app_name = doc.get('application', {}).get('name', '')
+                    self.active_connections[conn_id]['driver']   = driver
+                    self.active_connections[conn_id]['app_name'] = app_name or driver or None
+
+        elif log_id == 22944:  # connection ended
+            conn_id    = attr.get('connectionId')
+            if conn_id not in self.active_connections:
+                return
+            connection  = self.active_connections.pop(conn_id)
+            username    = connection.get('username')
+            remote_ip   = connection.get('ip')
+            client_tag  = connection.get('client_tag') or 'SHELL'
+            app_user    = connection.get('app_user')
+            disconnect_time = tz_now()
+
+            if username:
+            # Calculate duration and update the matching login entry
+                duration_str = None
+                try:
+                    match = db_auth_logs.find_one(
+                        {'connection_id': conn_id, 'username': username},
+                        sort=[('timestamp', -1)]
+                    )
+                    if match:
+                        connect_time = match.get('timestamp')
+                        if connect_time:
+                            if connect_time.tzinfo is None:
+                                connect_time = UTC.localize(connect_time)
+                            delta   = disconnect_time - connect_time
+                            seconds = int(delta.total_seconds())
+                            mins, secs  = divmod(seconds, 60)
+                            hours, mins = divmod(mins, 60)
+                            if hours:
+                                duration_str = f"{hours}h {mins}m {secs}s"
+                            elif mins:
+                                duration_str = f"{mins}m {secs}s"
+                            else:
+                                duration_str = f"{secs}s"
+
+                        db_auth_logs.update_one(
+                            {'_id': match['_id']},
+                            {'$set': {
+                                'disconnect_time': disconnect_time,
+                                'duration':        duration_str
+                            }}
+                        )
+                except Exception as e:
+                    print(f"[Duration update error] {e}")
+
+            # Persist OUT event
+                try:
+                    db_auth_logs.insert_one({
+                        'type':            'out',
+                        'username':        username,
+                        'app_user':        app_user,
+                        'ip':              remote_ip,
+                        'app_name':        connection.get('app_name'),
+                        'client_tag':      client_tag,
+                        'connection_id':   conn_id,
+                        'duration':        duration_str,
+                        'timestamp':       disconnect_time,
+                        'raw_ts':          event['timestamp'],
+                    })
+                except Exception as e:
+                    print(f"[Out log insert error] {e}")
+
+                self.emit('logout', {
+                    'username':        username,
+                    'ip':              remote_ip,
+                    'disconnect_time': event['timestamp'],
+                    'connection_id':   conn_id,
+                    'client_tag':      client_tag,
+                    'app_user':        app_user,
+                    'duration':        duration_str,
+                })
+
+            # Remove from logged_in_users if no more open connections
+                user_key = f"{username}@{remote_ip}"
+                if user_key in self.logged_in_users:
+                    conns = self.logged_in_users[user_key].get('connections', [])
+                    if conn_id in conns:
+                        conns.remove(conn_id)
+                    if not conns:
+                        del self.logged_in_users[user_key]
+    
 
     def handle_control(self, event):
         log_id = event['id']

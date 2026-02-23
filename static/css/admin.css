@@ -1352,3 +1352,129 @@ tr td:first-child { font-weight: 500; }
     color: var(--text-dim);
     border: 1px solid rgba(153,153,153,0.15);
 }
+
+.db-auth-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+.db-auth-table th {
+    text-align: left;
+    padding: 6px 10px;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+.db-auth-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.auth-badge.app-init { background: rgba(100,100,100,0.15); color: #888; }
+.auth-badge.out      { background: rgba(99,102,241,0.15);  color: #818cf8; }
+.badge-init { background: rgba(100,100,100,0.15); color: #888; }
+.badge-out  { background: rgba(99,102,241,0.15);  color: #818cf8; }
+#db-stats-bar {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+#db-stats-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.db-stats-row {
+    display: flex;
+    gap: 12px;
+}
+
+.db-stats-row .db-stat-card {
+    flex: 1;
+    min-height: unset;
+    height: auto;
+}
+
+/* Console split layout */
+#db-console-body {
+    display: flex;
+    gap: 0;
+    min-height: 320px;
+}
+
+#db-console-sidebar {
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+    border-right: 1px solid var(--border);
+    padding: 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.db-console-group {
+    margin-bottom: 12px;
+    padding: 0 12px;
+}
+
+.db-console-group-label {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+}
+
+.db-cmd-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: monospace;
+    font-size: 0.8rem;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 2px;
+}
+
+.db-cmd-btn:hover        { background: rgba(255,255,255,0.06); }
+.db-cmd-btn--danger      { color: var(--danger); }
+.db-cmd-btn--muted       { color: var(--text-muted); margin-top: auto; }
+
+#db-console-arg-wrap {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+#db-console-arg-wrap input {
+    flex: 1;
+    font-size: 0.75rem;
+    padding: 4px 6px;
+}
+
+#db-console-arg-wrap button {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+}
+
+#db-console-output {
+    flex: 1;
+    padding: 16px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    overflow-y: auto;
+    max-height: 400px;
+}
