@@ -1320,61 +1320,99 @@ class DBMonitor {
 
     // ── Render Auth Log ───────────────────────────────────────────────────────
     addAuthEntry({ type, data }) {
-        this.authEvents.unshift({ type, data, ts: Date.now() });
-        this.renderAuthLog();
-        const countEl = this.el('db-auth-count');
-        countEl.textContent = this.authEvents.length;
-    }
+    this.authEvents.unshift({ type, data, ts: Date.now() });
+    this.renderAuthLog();
+    const countEl = this.el('db-auth-count');
+    if (countEl) countEl.textContent = this.authEvents.length;
+     }
 
-    renderAuthLog() {
-        const container = this.el('db-auth-log');
-        const emptyEl   = this.el('db-auth-empty');
-        container.innerHTML = '';
+renderAuthLog() {
+    const container = this.el('db-auth-log');
+    const emptyEl   = this.el('db-auth-empty');
+    container.innerHTML = '';
 
-        let events = this.authEvents;
-        if (this.authFilter !== 'all') {
-            events = events.filter(e => {
-                if (this.authFilter === 'success') return e.type === 'success';
-                if (this.authFilter === 'failed')  return e.type === 'failed';
-                if (this.authFilter === 'app')     return e.type === 'app';
-                if (this.authFilter === 'direct')  return e.type === 'success';
-                return true;
-            });
-        }
-
-        if (!events.length) {
-            emptyEl.removeAttribute('hidden');
-            return;
-        }
-
-        emptyEl.setAttribute('hidden', '');
-
-        events.forEach(({ type, data: d }) => {
-            const div = document.createElement('div');
-            div.className = 'auth-entry';
-
-            const badgeLabels = { success: 'OK', failed: 'FAILED', app: 'APP', logout: 'OUT' };
-            const badge       = badgeLabels[type] || type.toUpperCase();
-            const timestamp   = formatTime(d.connect_time || d.timestamp);
-            const parsed      = this.parseAppName(d.app_name);
-            const userLabel   = type === 'app' ? (parsed.app_user || d.username) : d.username;
-
-            // Client column — use tag from backend if available
-            const client = d.client_tag
-                ? { label: d.client_tag, cls: `client-${d.client_tag.toLowerCase()}` }
-                : this.parseClientType(d.app_name);
-
-            div.innerHTML = `
-                <span class="auth-badge ${type === 'success' ? 'ok' : type}">${badge}</span>
-                <span class="auth-user">${userLabel || '—'}</span>
-                <span class="auth-ip">${d.ip || '—'}</span>
-                <span class="auth-client ${client.cls}">${client.label}</span>
-                <span class="auth-time">${timestamp}</span>
-            `;
-            container.appendChild(div);
+    let events = this.authEvents;
+    if (this.authFilter !== 'all') {
+        events = events.filter(e => {
+            if (this.authFilter === 'success')  return e.type === 'success';
+            if (this.authFilter === 'failed')   return e.type === 'failed';
+            if (this.authFilter === 'app')      return e.type === 'app';
+            if (this.authFilter === 'app_init') return e.type === 'app_init';
+            if (this.authFilter === 'direct')   return e.type === 'success';
+            return true;
         });
     }
 
+    if (!events.length) {
+        emptyEl.removeAttribute('hidden');
+        return;
+    }
+    emptyEl.setAttribute('hidden', '');
+
+    // Build a proper table so columns don't squeeze
+    const table = document.createElement('table');
+    table.className = 'db-auth-table';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th style="width:90px">Type</th>
+                <th style="width:120px">DB User</th>
+                <th>App User</th>
+                <th style="width:120px">IP</th>
+                <th style="width:110px">Client</th>
+                <th style="width:160px">Timestamp</th>
+                <th style="width:90px">Duration</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    `;
+    const tbody = table.querySelector('tbody');
+
+    const badgeMap = {
+        success:  { label: 'OK',       cls: 'ok'       },
+        failed:   { label: 'FAILED',   cls: 'failed'   },
+        app:      { label: 'APP',      cls: 'app'      },
+        app_init: { label: 'APP_INIT', cls: 'app-init' },
+        out:      { label: 'OUT',      cls: 'out'      },
+        logout:   { label: 'OUT',      cls: 'out'      },
+    };
+
+    events.forEach(({ type, data: d }) => {
+        const badge     = badgeMap[type] || { label: type.toUpperCase(), cls: 'ok' };
+        const timestamp = formatTime(d.connect_time || d.timestamp);
+        const appUser   = d.app_user || '—';
+        const duration  = d.duration || '—';
+
+        // Client label — prefer backend client_tag
+        let clientLabel = '—';
+        if (d.client_tag) {
+            const tagMap = {
+                'APP':      'PyMongo',
+                'APP_INIT': 'PyMongo',
+                'SHELL':    'MongoDB Shell',
+                'COMPASS':  'Compass',
+                'PYMONGO':  'PyMongo',
+            };
+            clientLabel = tagMap[d.client_tag] || d.client_tag;
+        } else if (d.app_name) {
+            clientLabel = d.app_name;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><span class="auth-badge ${badge.cls}">${badge.label}</span></td>
+            <td>${d.username || '—'}</td>
+            <td style="color:${appUser !== '—' ? 'var(--accent)' : 'var(--text-dim)'}">${appUser}</td>
+            <td>${d.ip || '—'}</td>
+            <td>${clientLabel}</td>
+            <td>${timestamp}</td>
+            <td style="color:var(--text-muted)">${duration}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    container.appendChild(table);
+}
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     addLifecycleEntry(type, data) {
         this.lifecycleEvents.unshift({ type, data });
@@ -1496,6 +1534,268 @@ class DBMonitor {
     }
 }
 
+// ============================================================================
+// SECTION: LOGS — Persistent DB Auth, Lifecycle, App Logs
+// ============================================================================
+
+const LAF_API  = `${DB_API}/auth-logs`;
+const LLF_API  = `${DB_API}/lifecycle-logs`;
+const LAPP_API = `${API}/logs`;
+
+let lafPage  = 1;
+let llfPage  = 1;
+let lappPage = 1;
+
+// ── DB AUTH EVENTS ────────────────────────────────────────────────────────────
+async function loadAuthLogs(page = 1) {
+    lafPage = page;
+    const loading = document.getElementById('laf-loading');
+    const empty   = document.getElementById('laf-empty');
+    const tbody   = document.getElementById('laf-body');
+
+    loading.removeAttribute('hidden');
+    empty.setAttribute('hidden', '');
+    tbody.innerHTML = '';
+
+    const from   = document.getElementById('laf-from').value;
+    const to     = document.getElementById('laf-to').value;
+    const type   = document.getElementById('laf-type').value;
+    const search = document.getElementById('laf-search').value.trim();
+
+    const params = new URLSearchParams({ page });
+    if (from)               params.append('from', from);
+    if (to)                 params.append('to',   to);
+    if (type && type !== 'all') params.append('type', type);
+    if (search)             params.append('q',    search);
+
+    const { ok, data } = await apiFetch(`${LAF_API}?${params}`);
+    loading.setAttribute('hidden', '');
+
+    if (!ok) return showToast(data.error || 'Failed to load auth logs', true);
+    if (!data.data.length) { empty.removeAttribute('hidden'); return; }
+
+    document.getElementById('laf-count').textContent = data.total;
+    renderLafPagination(data.page, data.pages);
+
+    const badgeMap = {
+        app:      { label: 'APP',      cls: 'badge-app'     },
+        app_init: { label: 'APP_INIT', cls: 'badge-init'    },
+        success:  { label: 'OK',       cls: 'badge-active'  },
+        failed:   { label: 'FAILED',   cls: 'badge-blocked' },
+        out:      { label: 'OUT',      cls: 'badge-out'     },
+    };
+
+    const clientMap = {
+        'APP':      'PyMongo',
+        'APP_INIT': 'PyMongo',
+        'SHELL':    'MongoDB Shell',
+        'COMPASS':  'Compass',
+        'PYMONGO':  'PyMongo',
+    };
+
+    data.data.forEach(e => {
+        const badge  = badgeMap[e.type] || { label: e.type.toUpperCase(), cls: 'badge-pending' };
+        const client = clientMap[e.client_tag] || e.client_tag || e.app_name || '—';
+        const appUser = e.app_user || '—';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><span class="badge ${badge.cls}">${badge.label}</span></td>
+            <td>${e.username || '—'}</td>
+            <td style="color:${appUser !== '—' ? 'var(--accent)' : 'var(--text-muted)'}">${appUser}</td>
+            <td>${e.ip || '—'}</td>
+            <td>${client}</td>
+            <td>${e.timestamp || '—'}</td>
+            <td style="color:var(--text-muted)">${e.duration || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderLafPagination(current, total) {
+    const el = document.getElementById('laf-pagination');
+    if (total <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button onclick="loadAuthLogs(${current - 1})" ${current <= 1 ? 'disabled' : ''}>← Prev</button>
+        <span>Page ${current} of ${total}</span>
+        <button onclick="loadAuthLogs(${current + 1})" ${current >= total ? 'disabled' : ''}>Next →</button>
+    `;
+}
+
+document.getElementById('laf-run').addEventListener('click',   () => loadAuthLogs(1));
+document.getElementById('laf-clear').addEventListener('click', () => {
+    document.getElementById('laf-from').value   = '';
+    document.getElementById('laf-to').value     = '';
+    document.getElementById('laf-type').value   = 'all';
+    document.getElementById('laf-search').value = '';
+    loadAuthLogs(1);
+});
+
+// ── DB LIFECYCLE ──────────────────────────────────────────────────────────────
+async function loadLifecycleLogs(page = 1) {
+    llfPage = page;
+    const loading = document.getElementById('llf-loading');
+    const empty   = document.getElementById('llf-empty');
+    const tbody   = document.getElementById('llf-body');
+
+    loading.removeAttribute('hidden');
+    empty.setAttribute('hidden', '');
+    tbody.innerHTML = '';
+
+    const from = document.getElementById('llf-from').value;
+    const to   = document.getElementById('llf-to').value;
+
+    const params = new URLSearchParams({ page });
+    if (from) params.append('from', from);
+    if (to)   params.append('to',   to);
+
+    const { ok, data } = await apiFetch(`${LLF_API}?${params}`);
+    loading.setAttribute('hidden', '');
+
+    if (!ok) return showToast(data.error || 'Failed to load lifecycle logs', true);
+    if (!data.data.length) { empty.removeAttribute('hidden'); return; }
+
+    document.getElementById('llf-count').textContent = data.total;
+    renderLlfPagination(data.page, data.pages);
+
+    const iconMap = {
+        started:  { label: 'STARTED',  cls: 'badge-active'  },
+        shutdown: { label: 'SHUTDOWN', cls: 'badge-pending' },
+        restart:  { label: 'RESTART',  cls: 'badge-pending' },
+        killed:   { label: 'KILLED',   cls: 'badge-blocked' },
+    };
+
+    data.data.forEach(e => {
+        const badge = iconMap[e.type] || { label: e.type.toUpperCase(), cls: 'badge-pending' };
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><span class="badge ${badge.cls}">${badge.label}</span></td>
+            <td>${e.pid  || '—'}</td>
+            <td>${e.port || '—'}</td>
+            <td>${e.host || '—'}</td>
+            <td>${e.uid  || '—'}</td>
+            <td>${e.timestamp || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderLlfPagination(current, total) {
+    const el = document.getElementById('llf-pagination');
+    if (total <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button onclick="loadLifecycleLogs(${current - 1})" ${current <= 1 ? 'disabled' : ''}>← Prev</button>
+        <span>Page ${current} of ${total}</span>
+        <button onclick="loadLifecycleLogs(${current + 1})" ${current >= total ? 'disabled' : ''}>Next →</button>
+    `;
+}
+
+document.getElementById('llf-run').addEventListener('click',   () => loadLifecycleLogs(1));
+document.getElementById('llf-clear').addEventListener('click', () => {
+    document.getElementById('llf-from').value = '';
+    document.getElementById('llf-to').value   = '';
+    loadLifecycleLogs(1);
+});
+
+// ── APP LOGS ──────────────────────────────────────────────────────────────────
+async function loadAppLogs(page = 1) {
+    lappPage = page;
+    const loading = document.getElementById('lapp-loading');
+    const empty   = document.getElementById('lapp-empty');
+    const tbody   = document.getElementById('lapp-body');
+
+    loading.removeAttribute('hidden');
+    empty.setAttribute('hidden', '');
+    tbody.innerHTML = '';
+
+    const from   = document.getElementById('lapp-from').value;
+    const to     = document.getElementById('lapp-to').value;
+    const action = document.getElementById('lapp-action').value;
+    const search = document.getElementById('lapp-search').value.trim();
+
+    const params = new URLSearchParams({ page });
+    if (from)                   params.append('date_from', from);
+    if (to)                     params.append('date_to',   to);
+    if (action && action !== 'all') params.append('action', action);
+    if (search)                 params.append('q',         search);
+
+    const { ok, data } = await apiFetch(`${LAPP_API}?${params}`);
+    loading.setAttribute('hidden', '');
+
+    if (!ok) return showToast(data.error || 'Failed to load app logs', true);
+    if (!data.data.length) { empty.removeAttribute('hidden'); return; }
+
+    document.getElementById('lapp-count').textContent = data.total;
+    renderLappPagination(data.page, data.pages);
+
+    const actionMap = {
+        login_success:           { cls: 'badge-active'  },
+        login_failed:            { cls: 'badge-blocked' },
+        logout:                  { cls: 'badge-out'     },
+        signup:                  { cls: 'badge-pending' },
+        account_approved:        { cls: 'badge-active'  },
+        forced_logout:           { cls: 'badge-blocked' },
+        password_reset_request:  { cls: 'badge-pending' },
+        role_changed:            { cls: 'badge-approved'},
+    };
+
+    data.data.forEach(e => {
+        const cls = (actionMap[e.action] || {}).cls || 'badge-pending';
+        const tr  = document.createElement('tr');
+        tr.innerHTML = `
+            <td><span class="badge ${cls}">${e.action || '—'}</span></td>
+            <td>${e.email      || '—'}</td>
+            <td>${e.ip_address || '—'}</td>
+            <td style="color:var(--text-muted)">${e.reason || '—'}</td>
+            <td>${e.timestamp  || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderLappPagination(current, total) {
+    const el = document.getElementById('lapp-pagination');
+    if (total <= 1) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+        <button onclick="loadAppLogs(${current - 1})" ${current <= 1 ? 'disabled' : ''}>← Prev</button>
+        <span>Page ${current} of ${total}</span>
+        <button onclick="loadAppLogs(${current + 1})" ${current >= total ? 'disabled' : ''}>Next →</button>
+    `;
+}
+
+document.getElementById('lapp-run').addEventListener('click',   () => loadAppLogs(1));
+document.getElementById('lapp-clear').addEventListener('click', () => {
+    document.getElementById('lapp-from').value    = '';
+    document.getElementById('lapp-to').value      = '';
+    document.getElementById('lapp-action').value  = 'all';
+    document.getElementById('lapp-search').value  = '';
+    loadAppLogs(1);
+});
+
+// ── TAB SWITCHING — load data on first visit ──────────────────────────────────
+const logsTabLoaded = { auth: false, lifecycle: false, app: false };
+
+document.querySelectorAll('.logs-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.logs-tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.logs-pane').forEach(p => p.setAttribute('hidden', ''));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById(`logs-pane-${tab}`).removeAttribute('hidden');
+
+        // Load on first open only — user can re-filter manually
+        if (!logsTabLoaded[tab]) {
+            logsTabLoaded[tab] = true;
+            if (tab === 'auth')      loadAuthLogs(1);
+            if (tab === 'lifecycle') loadLifecycleLogs(1);
+            if (tab === 'app')       loadAppLogs(1);
+        }
+    });
+});
+
+// Load default tab on section open
+loadAuthLogs(1);
+logsTabLoaded.auth = true;
 // ============================================================================
 // INIT DATABASE SECTION
 // ============================================================================
