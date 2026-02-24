@@ -275,6 +275,7 @@ startup()
 # ════════════════════════════════════════════════════════════
 # HEALTH & MONITORING
 # ════════════════════════════════════════════════════════════
+stock_cache = {'data': None, 'version': None, 'timestamp': None, 'timeout': Config.STOCK_CACHE_TIMEOUT}
 def get_server_status():
     """
     Pulls live MongoDB server state.
@@ -3154,7 +3155,6 @@ def edit_order(receipt_id):
     }), 200
 
 # STOCK MNGMNT
-
 @app.route('/stock', methods=['GET', 'POST'])
 def stock():
     """Handle stock management with pagination."""
@@ -3458,7 +3458,75 @@ def stock():
                 expire_date = datetime.strptime(expire_str.split()[0], '%Y-%m-%d').date()
                 item['days_left'] = (expire_date - today).days
             except:
-                item['days_left'] = None@app.route('/receipts')
+                item['days_left'] = None
+        else:
+            item['days_left'] = None
+
+        stock_items.append(item)
+
+    # Remove duplicates by stock_name (within page)
+    seen = set()
+    unique_stock_items = []
+    for item in stock_items:
+        stock_name = item['stock_name']
+        if stock_name not in seen:
+            seen.add(stock_name)
+            unique_stock_items.append(item)
+    stock_items = unique_stock_items
+
+    # Expiry notifications (only for current page)
+    for item in stock_items:
+        expire_date = item.get('expire_date')
+        if expire_date and expire_date != "0000-00-00 00:00:00":
+            try:
+                days_left = item.get('days_left')
+                if days_left is not None and days_left <= 30:
+                    notification_message = f"Stock '{item['stock_name']}' is nearing expiry ({days_left} days left) on {expire_date}"
+                    if not notifications_collection.find_one({'message': notification_message}):
+                        notifications_collection.insert_one({
+                            'recipient': session['user']['uid'],
+                            'message': notification_message,
+                            'timestamp': datetime.now(NAIROBI_TZ),
+                            'order_id': None,
+                            'read': False
+                        })
+            except ValueError:
+                continue
+
+    # Get all unique categories for the filter dropdown
+    all_categories = stock_collection.distinct('category')
+
+    recent_activity = [
+        {
+            'receipt_id': doc.get('receipt_id', str(doc['_id'])),
+            'salesperson_name': doc.get('salesperson_name', 'N/A'),
+            'shop_name': doc.get('shop_name', 'Unknown Shop'),
+            'date': process_date(doc.get('date'))
+        }
+        for doc in orders_collection.find().sort('date', -1).limit(3)
+    ]
+
+    # Pagination flags
+    has_prev = page > 1
+    has_next = page < total_pages
+
+    print(f"[STOCK_ROUTE] Rendering page {page}/{total_pages} with {len(stock_items)} items")
+    client_logs.append(f"Rendering page {page}/{total_pages} with {len(stock_items)} items")
+
+    return render_template(
+        'stock.html',
+        stock_items=stock_items,
+        all_categories=all_categories,
+        page=page,
+        total_pages=total_pages,
+        has_prev=has_prev,
+        has_next=has_next,
+        search=search,
+        category=category,
+        recent_activity=recent_activity,
+        client_logs=client_logs
+    )
+
 def receipts():
     try:
         page = request.args.get('page', 1, type=int)
