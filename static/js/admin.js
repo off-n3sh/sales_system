@@ -984,6 +984,8 @@ class DBMonitor {
                     username:     e.username,
                     ip:           e.ip,
                     app_name:     e.app_name,
+                    client_tag:   e.client_tag,
+                    duration:     e.duration,
                     connect_time: e.timestamp,
                     timestamp:    e.timestamp,
                 }
@@ -997,13 +999,13 @@ class DBMonitor {
     }
 
     onLogin(data) {
-        // Use conn_id as key — each connection is its own row
         const key = data.connection_id != null
             ? `conn_${data.connection_id}`
             : `${data.username}@${data.ip}_${Date.now()}`;
 
-        const tag = data.client_tag || this.parseClientType(data.app_name).label;
-        const isApp = tag === 'PYMONGO';
+        const tag    = data.client_tag || this.parseClientType(data.app_name).label;
+        const tagLow = (tag || '').toLowerCase();
+        const isApp  = tagLow.includes('pymongo') || tagLow.includes('python');
 
         this.sessions.set(key, {
             conn_id:    data.connection_id,
@@ -1815,4 +1817,3 @@ function initDatabaseSection() {
 
 showSection('overview');
 loadStats();
-

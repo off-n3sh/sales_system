@@ -3155,6 +3155,31 @@ def edit_order(receipt_id):
     }), 200
 
 # STOCK MNGMNT
+def create_stock_notification(action, stock_name, quantity_or_price, user):
+    """Create notification for stock changes"""
+    last_notif = notifications_collection.find_one(sort=[('notification_id', -1)])
+    next_id = f"NOTIF{str(int(last_notif['notification_id'].replace('NOTIF', '')) + 1).zfill(6)}" if last_notif else 'NOTIF000001'
+    
+    messages = {
+        'add_stock': f"New stock '{stock_name}' added ({quantity_or_price} units)",
+        'restock': f"'{stock_name}' restocked (+{quantity_or_price} units)",
+        'update_price': f"Price updated for '{stock_name}'",
+        'update_price_and_category': f"Details updated for '{stock_name}'",
+        'edit_stock_name': f"Stock renamed to '{stock_name}'"
+    }
+    
+    notifications_collection.insert_one({
+        'notification_id': next_id,
+        'type': 'stock_change',
+        'category': 'stock',
+        'message': messages.get(action, f"Stock '{stock_name}' modified"),
+        'stock_name': stock_name,
+        'action': action,
+        'user': user,
+        'created_at': datetime.now(NAIROBI_TZ),
+        'read': False
+    })
+
 @app.route('/stock', methods=['GET', 'POST'])
 def stock():
     """Handle stock management with pagination."""
@@ -3185,6 +3210,7 @@ def stock():
             if not all([stock_name, category or new_category, initial_quantity, reorder_quantity, selling_price, wholesale_price, company_price, expire_date]):
                 print("[STOCK_ROUTE] Error: Missing required fields in add_stock")
                 client_logs.append("Error: Missing required fields in add_stock")
+                create_stock_notification('add_stock', stock_name, initial_quantity, f"{session['user']['first_name']} {session['user']['last_name']}")
                 return jsonify({'status': 'error', 'error': 'All fields are required'}), 400
 
             try:
@@ -3247,8 +3273,19 @@ def stock():
             log_stock_change(final_category, stock_name, 'add_stock', initial_quantity, selling_price)
             log_stock_change(final_category, stock_name, 'wholesale_price_set', 0, wholesale_price)
             cache_cleared = clear_stock_cache_logic()
+            notification_id = f"STOCK-{stock_id}-{int(datetime.now(NAIROBI_TZ).timestamp())}"
+            notifications_collection.insert_one({
+                'notification_id': notification_id,
+                'type': 'stock_change',
+                'category': 'stock',
+                'message': f"New stock '{stock_name}' added ({initial_quantity} units)",
+                'stock_name': stock_name,
+                'action': 'add_stock',
+                'user': session['user']['email'],
+                'created_at': datetime.now(NAIROBI_TZ),
+                'read': False
+            })
             print(f"[STOCK_ROUTE] add_stock completed, cache cleared: {cache_cleared}")
-            client_logs.append(f"add_stock completed, cache cleared: {cache_cleared}")
             return jsonify({'status': 'success', 'message': 'Stock added successfully'}), 200
 
         elif action == 'restock':
@@ -3270,6 +3307,7 @@ def stock():
                             {'$set': {'stock_quantity': current_qty + restock_qty}}
                         )
                         log_stock_change(stock.get('category'), stock.get('stock_name'), 'restock', restock_qty, stock.get('selling_price'))
+                        create_stock_notification('restock', stock.get('stock_name'), restock_qty, f"{session['user']['first_name']} {session['user']['last_name']}")
                         cache_cleared = clear_stock_cache_logic()
                         print(f"[STOCK_ROUTE] restock completed, cache cleared: {cache_cleared}")
                         client_logs.append(f"restock completed, cache cleared: {cache_cleared}")
@@ -3309,6 +3347,7 @@ def stock():
                             if new_wholesale_price > 0:
                                 log_stock_change(stock.get('category'), stock.get('stock_name'), 'wholesale_price_update', 0, new_wholesale_price)
                             cache_cleared = clear_stock_cache_logic()
+                            create_stock_notification('update_price', stock.get('stock_name'), new_selling_price or new_wholesale_price, f"{session['user']['first_name']} {session['user']['last_name']}")
                             print(f"[STOCK_ROUTE] update_price completed, cache cleared: {cache_cleared}")
                             client_logs.append(f"update_price completed, cache cleared: {cache_cleared}")
                             return jsonify({'status': 'success', 'message': 'Prices updated successfully'}), 200
@@ -3343,6 +3382,7 @@ def stock():
                     return jsonify({'status': 'error', 'error': f"Stock name '{new_stock_name}' already exists"}), 400
                 stock_collection.update_one({'stock_id': stock_id}, {'$set': {'stock_name': new_stock_name}})
                 log_stock_change(stock.get('category'), new_stock_name, 'name_update', 0, stock.get('selling_price'))
+                create_stock_notification('edit_stock_name', new_stock_name, 0, f"{session['user']['first_name']} {session['user']['last_name']}")
                 cache_cleared = clear_stock_cache_logic()
                 print(f"[STOCK_ROUTE] edit_stock_name completed, cache cleared: {cache_cleared}")
                 client_logs.append(f"edit_stock_name completed, cache cleared: {cache_cleared}")
@@ -3408,6 +3448,7 @@ def stock():
                         if 'category' in updates:
                             log_stock_change(updates['category'], stock.get('stock_name'), 'category_update', 0, stock.get('selling_price'))
                         cache_cleared = clear_stock_cache_logic()
+                        create_stock_notification('update_price_and_category', stock.get('stock_name'), 0, f"{session['user']['first_name']} {session['user']['last_name']}")
                         print(f"[STOCK_ROUTE] update_price_and_category completed, cache cleared: {cache_cleared}")
                         client_logs.append(f"update_price_and_category completed, cache cleared: {cache_cleared}")
                         return jsonify({'status': 'success', 'message': 'Price and category updated successfully'}), 200
@@ -5498,6 +5539,18 @@ def get_notifications():
                     'days_left': notif.get('days_left'),
                     'category': 'stock'
                 })
+            elif notif.get('type') == 'stock_change':
+                result.append({
+                    'id': notif.get('notification_id'),
+                    'message': notif.get('message'),
+                    'time': notif.get('created_at').isoformat(),
+                    'unread': not notif.get('read', False),
+                    'type': 'stock_change',
+                    'category': 'stock',
+                    'stock_name': notif.get('stock_name'),
+                    'action': notif.get('action'),
+                    'creator': notif.get('user'),
+                })
             else:
                 result.append({
                     'id': notif.get('notification_id'),
@@ -5677,5 +5730,4 @@ def logout():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)    
-
+    app.run(host='0.0.0.0', port=5001, debug=True)
