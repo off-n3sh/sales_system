@@ -392,6 +392,25 @@ function adaptLegacyNotification(notif) {
             ],
             icon: 'alert'
         };
+    } else if (notif.type === 'stock_change') {
+        const actionLabels = {
+            'add_stock':                'Stock Added',
+            'restock':                  'Stock Restocked',
+            'update_price':             'Price Updated',
+            'update_price_and_category':'Stock Updated',
+            'edit_stock_name':          'Stock Renamed'
+        };
+        const actionLabel = actionLabels[notif.action] || 'Stock Modified';
+        adapted.data = {
+            title:    actionLabel,
+            subtitle: notif.stock_name || 'Unknown Stock',
+            details: [
+                { label: 'Updated by', value: notif.creator || 'System' },
+                { label: 'Action',     value: notif.message || actionLabel }
+            ],
+            icon: 'stock'
+        };
+    } else if (notif.type === 'order_edit') {
 
     } else if (notif.type === 'order_edit') {
     // Extract edit details

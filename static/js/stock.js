@@ -199,5 +199,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    function showToast(msg, isError = false) {
+        const toast  = document.getElementById('notification-toast');
+        const title  = document.getElementById('notification-title');
+        const msgEl  = document.getElementById('notification-message');
+        const icon   = toast.querySelector('svg');
+        title.textContent = isError ? 'Error' : 'Success';
+        msgEl.textContent = msg;
+        icon.classList.toggle('text-red-500',   isError);
+        icon.classList.toggle('text-green-500', !isError);
+        toast.classList.remove('hidden', 'translate-y-10', 'opacity-0');
+        setTimeout(() => toast.classList.add('translate-y-10', 'opacity-0'), 3000);
+        setTimeout(() => toast.classList.add('hidden'), 3400);
+    }
+
+    // ── Delegated form intercept (catches dynamically rendered forms) ─────────
+    document.addEventListener('submit', async (e) => {
+        const form = e.target;
+        if (form.method !== 'post' || !form.action.includes('/stock')) return;
+        e.preventDefault();
+        try {
+            const res  = await fetch('/stock', { method: 'POST', body: new FormData(form) });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showToast(data.message || 'Done');
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                showToast(data.error || 'Something went wrong', true);
+            }
+        } catch (err) {
+            showToast('Request failed', true);
+        }
+    });
+
     render();
 });
