@@ -206,11 +206,15 @@ create_mongod_conf() {
     run_step "backup existing mongod.conf" sudo_maybe cp -a "$conf" "${conf}.bak.$(date +%s)"
   fi
 
-  # Ensure pid file directory exists
+  # Ensure pid dir, data dir, and log dir owned by real running user (no mongodb system user assumed)
   local piddir_owner="${SUDO_USER:-$(whoami)}"
   run_step "ensure /run/mongod dir" sudo_maybe mkdir -p /run/mongod
   sudo_maybe chown "${piddir_owner}:${piddir_owner}" /run/mongod 2>/dev/null || \
     warn "Could not chown /run/mongod to ${piddir_owner} — mongod may fail to write pidfile"
+  run_step "chown /var/lib/mongodb to ${piddir_owner}" \
+    sudo_maybe chown -R "${piddir_owner}:${piddir_owner}" /var/lib/mongodb
+  run_step "chown /var/log/mongodb to ${piddir_owner}" \
+    sudo_maybe chown -R "${piddir_owner}:${piddir_owner}" /var/log/mongodb
 
   info "Writing new mongod.conf to $conf: fork=true, bindIp=0.0.0.0, authorization=enabled"
   sudo_maybe bash -c "cat > '$conf' <<'MONGODCONF'
@@ -303,10 +307,11 @@ step_mongo_config_users_seed() {
     [[ $_rc -eq 1 ]] && auth_required="no" || auth_required="unknown"
   fi
 
+  # ── PATH A: Auth enforced — verify admin, then ensure dreamland user exists ──
   if [[ "$auth_required" == "yes" ]]; then
-    ok "Auth is enforced — MongoDB is already configured."
+    ok "Auth is enforced — MongoDB already configured."
     echo
-    info "Enter credentials to verify and cache for step 4:"
+    info "Verifying admin and ensuring app user exists:"
     echo
 
     local APP_DB="${MONGO_DB:-$DEFAULT_DB}"
@@ -315,8 +320,6 @@ step_mongo_config_users_seed() {
     local ADMIN_USER="${ADMIN_MONGO_USER:-rootadmin}"
     local ADMIN_PASS=""
 
-    prompt_default APP_USER   "App Mongo username"          "$APP_USER"
-    prompt_secret  APP_PASS   "App Mongo password (for $APP_USER)"
     prompt_default ADMIN_USER "Admin Mongo username"        "$ADMIN_USER"
     prompt_secret  ADMIN_PASS "Admin Mongo password (for $ADMIN_USER)"
 
@@ -328,13 +331,42 @@ step_mongo_config_users_seed() {
     fi
     ok "Admin verified."
 
-    info "Testing app user login on $APP_DB..."
-    if ! mongo_eval --host "$host" --user "$APP_USER" --pass "$APP_PASS" --authdb "$APP_DB" \
-         "db.runCommand({ping:1})" >/dev/null 2>&1; then
-      err "App user auth FAILED on $APP_DB — wrong credentials or user does not exist on that DB."
-      return 1
+    prompt_default APP_DB   "App database"       "$APP_DB"
+    prompt_default APP_USER "App Mongo username"  "$APP_USER"
+    prompt_secret  APP_PASS "App Mongo password (for $APP_USER)"
+
+    info "Checking if app user '$APP_USER' exists on '$APP_DB'..."
+    local user_exists
+    user_exists=$(mongo_eval --host "$host" --user "$ADMIN_USER" --pass "$ADMIN_PASS" --authdb "admin" "
+      const adb = db.getSiblingDB('${APP_DB}');
+      print(adb.getUser('${APP_USER}') ? 'yes' : 'no');
+    " 2>/dev/null | grep -E '^(yes|no)$' | tail -1)
+
+    if [[ "$user_exists" == "yes" ]]; then
+      info "User '$APP_USER' already exists — verifying password..."
+      if ! mongo_eval --host "$host" --user "$APP_USER" --pass "$APP_PASS" --authdb "$APP_DB"            "db.runCommand({ping:1})" >/dev/null 2>&1; then
+        err "Password wrong for '$APP_USER' on '$APP_DB' — user exists but password is incorrect."
+        return 1
+      fi
+      ok "App user '$APP_USER' verified."
+    else
+      info "User '$APP_USER' not found — creating with provided password..."
+      mongo_eval --host "$host" --user "$ADMIN_USER" --pass "$ADMIN_PASS" --authdb "admin" "
+        const adb = db.getSiblingDB('${APP_DB}');
+        adb.createUser({user: '${APP_USER}', pwd: '${APP_PASS}', roles: [{role: 'readWrite', db: '${APP_DB}'}]});
+        print('app user created: ${APP_USER}');
+      " 2>&1 | grep -v '^$' || { err "Failed to create app user '$APP_USER'."; return 1; }
+      ok "App user '$APP_USER' created on '$APP_DB'."
     fi
-    ok "App user '$APP_USER' verified on '$APP_DB'."
+
+    info "Seeding '$APP_DB'..."
+    mongo_eval --host "$host" --user "$ADMIN_USER" --pass "$ADMIN_PASS" --authdb "admin" "
+      db.getSiblingDB('${APP_DB}').getCollection('init').updateOne(
+        {_id: 'seed'},
+        {\$set: {createdAt: new Date(), note: 'seeded by deployment script'}},
+        {upsert: true}
+      );
+    " >/dev/null 2>&1 || true
 
     run_step "cache credentials for step 4" sudo_maybe bash -c "cat > '${ENV_DIR}/.last_inputs' <<EOF
 MONGO_HOST=${host}
@@ -351,7 +383,8 @@ EOF"
     return 0
   fi
 
-  warn "Mongo has no auth — fresh setup. Will create users now."
+  # ── PATH B: No auth — fresh install, create both admin and app user ─────────
+  warn "Mongo has no auth — fresh install. Creating admin and app user now."
   echo
 
   local APP_DB="${MONGO_DB:-$DEFAULT_DB}"
@@ -360,35 +393,41 @@ EOF"
   local ADMIN_USER="${ADMIN_MONGO_USER:-}"
   local ADMIN_PASS="${ADMIN_MONGO_PASS:-}"
 
-  prompt_default APP_DB    "App database"           "$APP_DB"
-  prompt_default APP_USER  "App Mongo username"     "$APP_USER"
-  [[ -n "$APP_PASS" ]]   || prompt_secret APP_PASS  "App Mongo password (for $APP_USER)"
+  prompt_default APP_DB    "App database"             "$APP_DB"
+  prompt_default APP_USER  "App Mongo username"       "$APP_USER"
+  [[ -n "$APP_PASS" ]]   || prompt_secret APP_PASS    "App Mongo password (for $APP_USER)"
   [[ -n "$ADMIN_USER" ]] || prompt_default ADMIN_USER "Admin Mongo username" "rootadmin"
   [[ -n "$ADMIN_PASS" ]] || prompt_secret  ADMIN_PASS "Admin Mongo password (for $ADMIN_USER)"
 
-  run_step "create admin user" bash -c "
-    mongo_eval --host '$host' \"
-      const adm = db.getSiblingDB('admin');
-      const u = '$ADMIN_USER', p = '$ADMIN_PASS';
-      if (adm.getUser(u)) { print('admin exists: ' + u); }
-      else { adm.createUser({user: u, pwd: p, roles: [{role: 'root', db: 'admin'}]}); print('admin created: ' + u); }
-    \"
-  "
+  info "Creating admin user '${ADMIN_USER}' (no-auth login)..."
+  mongo_eval --host "$host" "
+    const adm = db.getSiblingDB('admin');
+    const u = '${ADMIN_USER}', p = '${ADMIN_PASS}';
+    if (adm.getUser(u)) {
+      print('admin already exists: ' + u);
+    } else {
+      adm.createUser({user: u, pwd: p, roles: [{role: 'root', db: 'admin'}]});
+      print('admin created: ' + u);
+    }
+  " 2>&1 | grep -v '^$' || { err "Failed to create admin user."; return 1; }
 
-  run_step "create app user + seed $APP_DB" bash -c "
-    mongo_eval --host '$host' --user '$ADMIN_USER' --pass '$ADMIN_PASS' --authdb admin \"
-      const adb = db.getSiblingDB('$APP_DB');
-      const u = '$APP_USER', p = '$APP_PASS';
-      if (adb.getUser(u)) { print('app user exists: ' + u); }
-      else { adb.createUser({user: u, pwd: p, roles: [{role: 'readWrite', db: '$APP_DB'}]}); print('app user created: ' + u); }
-      adb.getCollection('init').updateOne(
-        {_id: 'seed'},
-        {\$set: {createdAt: new Date(), note: 'seeded by deployment script'}},
-        {upsert: true}
-      );
-      print('DB seeded: $APP_DB');
-    \"
-  "
+  info "Creating app user '${APP_USER}' on '${APP_DB}'..."
+  mongo_eval --host "$host" --user "$ADMIN_USER" --pass "$ADMIN_PASS" --authdb "admin" "
+    const adb = db.getSiblingDB('${APP_DB}');
+    const u = '${APP_USER}', p = '${APP_PASS}';
+    if (adb.getUser(u)) {
+      print('app user already exists: ' + u);
+    } else {
+      adb.createUser({user: u, pwd: p, roles: [{role: 'readWrite', db: '${APP_DB}'}]});
+      print('app user created: ' + u);
+    }
+    adb.getCollection('init').updateOne(
+      {_id: 'seed'},
+      {\$set: {createdAt: new Date(), note: 'seeded by deployment script'}},
+      {upsert: true}
+    );
+    print('DB seeded: ${APP_DB}');
+  " 2>&1 | grep -v '^$' || { err "Failed to create app user on $APP_DB."; return 1; }
 
   info "Verifying admin..."
   if ! mongo_eval --host "$host" --user "$ADMIN_USER" --pass "$ADMIN_PASS" --authdb "admin" \
@@ -397,14 +436,7 @@ EOF"
     return 1
   fi
   ok "Admin verified."
-
-  info "Verifying app user on $APP_DB..."
-  if ! mongo_eval --host "$host" --user "$APP_USER" --pass "$APP_PASS" --authdb "$APP_DB" \
-       "db.runCommand({ping:1})" >/dev/null 2>&1; then
-    err "App user verify FAILED on $APP_DB."
-    return 1
-  fi
-  ok "App user '$APP_USER' verified on '$APP_DB'."
+  ok "App user '$APP_USER' created on '$APP_DB'."
   echo
 
   run_step "cache credentials for step 4" sudo_maybe bash -c "cat > '${ENV_DIR}/.last_inputs' <<EOF
@@ -480,7 +512,7 @@ copy_project() {
   sudo_maybe mkdir -p "$INSTALL_DIR" || return 1
 
   if need_cmd rsync; then
-    rsync -a --delete \
+    sudo_maybe rsync -a --delete \
       --exclude ".git" --exclude ".venv" --exclude "__pycache__" --exclude "*.pyc" \
       "./" "$INSTALL_DIR/"
   else
@@ -491,7 +523,7 @@ copy_project() {
       run_step "install rsync" sudo_maybe apt-get install -y rsync
       if need_cmd rsync; then
         ok "rsync installed. Proceeding with rsync copy."
-        rsync -a --delete \
+        sudo_maybe rsync -a --delete \
           --exclude ".git" --exclude ".venv" --exclude "__pycache__" --exclude "*.pyc" \
           "./" "$INSTALL_DIR/"
       else
